@@ -39,30 +39,42 @@ set_target_properties(bn PROPERTIES
 )
 
 # ========== 编译 测试程序 ==========
-# 自动收集 test/ 目录下所有 .c 源文件
-aux_source_directory(${PROJECT_SOURCE_DIR}/test TEST_SRC)
-# 过滤出测试程序源文件（精准编译当前指定的测试文件）
-set(TEST_UADD ${PROJECT_SOURCE_DIR}/test/bn_unsigned_add_test.c)
-# 生成测试可执行程序
-add_executable(bn_unsigned_add_test ${TEST_UADD} ${TEST_SRC})
-# 为测试程序指定头文件搜索路径
-target_include_directories(bn_unsigned_add_test
-    PUBLIC ${PROJECT_SOURCE_DIR}/include
-    PUBLIC ${PROJECT_SOURCE_DIR}/test
+# test/ 不生成可执行程序的文件
+set(TEST_UTILS_SRC
+    ${PROJECT_SOURCE_DIR}/test/test_utils.c
 )
-# 链接静态库到测试程序
-target_link_libraries(bn_unsigned_add_test PUBLIC bn)
-# 为测试程序指定输出目录
-set_target_properties(bn_unsigned_add_test PROPERTIES
-    # 可执行文件输出到build/test/
-    RUNTIME_OUTPUT_DIRECTORY ${BUILD_TEST_DIR}
-    RUNTIME_OUTPUT_DIRECTORY_DEBUG ${BUILD_TEST_DIR}
-    RUNTIME_OUTPUT_DIRECTORY_RELEASE ${BUILD_TEST_DIR}
-    # 若需保存test/编译的.o文件，解开下面注释，输出到build/test/
-    # OBJECT_OUTPUT_DIRECTORY ${BUILD_TEST_DIR}
-    # OBJECT_OUTPUT_DIRECTORY_DEBUG ${BUILD_TEST_DIR}
-    # OBJECT_OUTPUT_DIRECTORY_RELEASE ${BUILD_TEST_DIR}
+# 测试程序源文件
+set(TEST_FILES
+    "bn_unsigned_add_test.c"
+    "bn_unsigned_sub_test.c"
 )
+# 批量配置所有测试程序
+foreach(TEST_FILE ${TEST_FILES})
+    # 提取可执行程序名（去掉.c后缀）
+    string(REPLACE ".c" "" TEST_EXEC_NAME ${TEST_FILE})
+    # 拼接测试文件完整路径
+    set(TEST_FILE_PATH ${PROJECT_SOURCE_DIR}/test/${TEST_FILE})
+    # 生成测试可执行程序
+    add_executable(${TEST_EXEC_NAME} ${TEST_FILE_PATH} ${TEST_UTILS_SRC})
+    # 为测试程序指定头文件搜索路径
+    target_include_directories(${TEST_EXEC_NAME}
+        PUBLIC ${PROJECT_SOURCE_DIR}/include
+        PUBLIC ${PROJECT_SOURCE_DIR}/test
+    )
+    # 链接静态库到测试程序
+    target_link_libraries(${TEST_EXEC_NAME} PUBLIC bn)
+    # 为测试程序指定输出目录
+    set_target_properties(${TEST_EXEC_NAME} PROPERTIES
+        # 可执行文件输出到build/test/
+        RUNTIME_OUTPUT_DIRECTORY ${BUILD_TEST_DIR}
+        RUNTIME_OUTPUT_DIRECTORY_DEBUG ${BUILD_TEST_DIR}
+        RUNTIME_OUTPUT_DIRECTORY_RELEASE ${BUILD_TEST_DIR}
+        # 若需保存test/编译的.o文件，解开下面注释，输出到build/test/
+        # OBJECT_OUTPUT_DIRECTORY ${BUILD_TEST_DIR}
+        # OBJECT_OUTPUT_DIRECTORY_DEBUG ${BUILD_TEST_DIR}
+        # OBJECT_OUTPUT_DIRECTORY_RELEASE ${BUILD_TEST_DIR}
+    )
+endforeach()
 
 # ===== 编译优化 =====
 # 开启所有警告 + 关闭无用警告 + O2优化
@@ -123,7 +135,10 @@ target_compile_options(bn PRIVATE
     $<$<CONFIG:Release>:${BN_RELEASE_COMPILE_OPTIONS}>
     $<$<CONFIG:Debug>:${BN_DEBUG_COMPILE_OPTIONS}>
 )
-target_compile_options(bn_unsigned_add_test PRIVATE
+foreach(TEST_FILE ${TEST_FILES})
+    string(REPLACE ".c" "" TEST_EXEC_NAME ${TEST_FILE})
+    target_compile_options(${TEST_EXEC_NAME} PRIVATE
     $<$<CONFIG:Release>:${BN_RELEASE_COMPILE_OPTIONS}>
     $<$<CONFIG:Debug>:${BN_DEBUG_COMPILE_OPTIONS}>
 )
+endforeach()
