@@ -102,6 +102,7 @@ int bn_set_word(BigNum *a, BN_TYPE_ULONG w);
 
 /* bn_add.c */
 int bn_unsigned_add(BigNum *r, const BigNum *a, const BigNum *b);
+int bn_unsigned_sub(BigNum *r, const BigNum *a, const BigNum *b);
 
 /* bn_conv.c */
 int bn_dec2bn(BigNum **bn, const char *a);
