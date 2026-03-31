@@ -16,7 +16,8 @@ int bn_left_shift(BigNum *r, const BigNum *a, int n)
 {
     int ret;
 
-    if (n < 0) {
+    if (n < 0)
+    {
         return 0;
     }
 
@@ -50,11 +51,13 @@ int bn_left_shift_fixed_top(BigNum *r, const BigNum *a, int n)
 
     nw = n / BN_UL_BITS;    // 整字移位次数: n = nw * BN_UL_BITS + lb
     /* 扩容r的内存: 需要容纳 a->used_words + nw + 1 个字(+1预留进位空间) */
-    if (bn_words_expend(r, a->used_words + nw + 1) == NULL) {
+    if (bn_words_expend(r, a->used_words + nw + 1) == NULL)
+    {
         return 0;
     }
 
-    if (a->used_words != 0) {   // 大数a有有效数据
+    if (a->used_words != 0) // 大数a有有效数据
+    {
         lb = (unsigned int)n % BN_UL_BITS;  // 单字内左移位数
         rb = BN_UL_BITS - lb;   // 右边补偿位数
         rb %= BN_UL_BITS;   // 兜底: lb=0时rb=BN_UL_BITS，取模后为0(避免未定义行为)
@@ -68,7 +71,8 @@ int bn_left_shift_fixed_top(BigNum *r, const BigNum *a, int n)
         l = f[a->used_words - 1];   // 取a的最高有效字，先处理进位
         t[a->used_words] = (l >> rb) & rmask;   // 处理最高字的进位: 左移lb位后，高位溢出的部分存入r的高字
         /* 循环处理所有有效字: 从高到低，完成单字内移位+跨字拼接 */
-        for (i = a->used_words - 1; i > 0; i--) {
+        for (i = a->used_words - 1; i > 0; i--)
+        {
             m = l << lb;    // 当前字左移lb位，低位补0
             l = f[i - 1];   // 取下一个低字
             /* 拼接: 当前字左移结果+下一字右移rb位的进位 -> 存入r的对应位置*/
@@ -76,11 +80,14 @@ int bn_left_shift_fixed_top(BigNum *r, const BigNum *a, int n)
         }
         /* 处理最低字: 无更低字的进位，直接左移lb位即可 */
         t[0] = (l << lb) & BN_MASK;
-    } else {    // 大数a全零(边界处理)
+    }
+    else    // 大数a全零(边界处理)
+    {
         r->d[nw] = 0;
     }
 
-    if (nw != 0) {  // 若有整字移位，r的前nw个字全部填0
+    if (nw != 0)    // 若有整字移位，r的前nw个字全部填0
+    {
         memset(r->d, 0, sizeof(BN_TYPE_ULONG) * nw);
     }
 

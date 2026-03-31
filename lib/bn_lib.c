@@ -16,11 +16,16 @@ int bn_get_flags(const BigNum *a, int n)
 
 static void bn_free_d(BigNum *a, int clear)
 {
-    if (bn_get_flags(a, BN_FLAG_SECURE)) {
+    if (bn_get_flags(a, BN_FLAG_SECURE))
+    {
         MM_SECURE_CLEAR_FREE(a->d, a->dmax * sizeof(a->d[0]));
-    } else if (clear != 0) {
+    }
+    else if (clear != 0)
+    {
         MM_CLEAR_FREE(a->d, a->dmax * sizeof(a->d[0]));
-    } else {
+    }
+    else
+    {
         MM_FREE(a->d);
     }
 }
@@ -33,15 +38,18 @@ static void bn_free_d(BigNum *a, int clear)
  */
 void bn_free(BigNum *a)
 {
-    if (a == NULL) {
+    if (a == NULL)
+    {
         return;
     }
     /* 1. 若不是“静态数据”, 释放d指向的大数数据 bn_free_d(a, 0) */
-    if (!bn_get_flags(a, BN_FLAG_STATIC_DATA)) {
+    if (!bn_get_flags(a, BN_FLAG_STATIC_DATA))
+    {
         bn_free_d(a, 0);    // 第二个参数=0: 仅释放内存，不清理数据
     }
     /* 2. 若BigNum本身是malloc分配的，直接释放a(不清理a的内存呢) */
-    if (bn_get_flags(a, BN_FLAG_MALLOCED)) {
+    if (bn_get_flags(a, BN_FLAG_MALLOCED))
+    {
         MM_FREE(a);
     }
 }
@@ -54,11 +62,13 @@ void bn_free(BigNum *a)
  */
 void bn_clear_free(BigNum *a)
 {
-    if (a == NULL) {
+    if (a == NULL)
+    {
         return;
     }
     /* 1. 若不是“静态数据”, 释放d指向的大数数据 bn_free_d(a, 1) */
-    if (a->d != NULL && !bn_get_flags(a, BN_FLAG_STATIC_DATA)) {
+    if (a->d != NULL && !bn_get_flags(a, BN_FLAG_STATIC_DATA))
+    {
         bn_free_d(a, 1);    // 第二个参数=1: 释放前先清空d的数据
     }
     /*
@@ -66,7 +76,8 @@ void bn_clear_free(BigNum *a)
      *    - 先用mm_cleanse清空a的内存(填充0)
      *    - 再释放a
      */
-    if (bn_get_flags(a, BN_FLAG_MALLOCED)) {
+    if (bn_get_flags(a, BN_FLAG_MALLOCED))
+    {
         mm_cleanse(a, sizeof(*a));
         MM_FREE(a);
     }
@@ -95,7 +106,8 @@ BigNum* bn_new(void)
     BigNum *bn;
 
     bn = (BigNum *)MM_ZALLOC(sizeof(*bn));
-    if (bn == NULL) {
+    if (bn == NULL)
+    {
         return NULL;
     }
     bn->flags = BN_FLAG_MALLOCED;
@@ -111,7 +123,8 @@ BigNum* bn_new(void)
 BigNum* bn_secure_new(void)
 {
     BigNum *se_bn = bn_new();
-    if (se_bn != NULL) {
+    if (se_bn != NULL)
+    {
         bn_set_flags(se_bn, BN_FLAG_SECURE);
     }
     return se_bn;
@@ -133,29 +146,36 @@ static BN_TYPE_ULONG* bn_expand_internal(const BigNum *a, int words)
     BN_TYPE_ULONG *b = NULL;
 
     /* 内存分配溢出校验(防止words过大导致分配尺寸超限) */
-    if (bn_likely(words > (INT_MAX / (BN_UL_BITS * 4)))) {
+    if (bn_likely(words > (INT_MAX / (BN_UL_BITS * 4))))
+    {
         return NULL;
     }
 
     /* 禁止扩容静态数据的BigNum(静态数据无法动态扩容) */
-    if (bn_unlikely(bn_get_flags(a, BN_FLAG_STATIC_DATA))) {
+    if (bn_unlikely(bn_get_flags(a, BN_FLAG_STATIC_DATA)))
+    {
         return NULL;
     }
 
     /* 区分安全堆/普通堆分配内存(自动清零) */
-    if (bn_get_flags(a, BN_FLAG_SECURE)) {
+    if (bn_get_flags(a, BN_FLAG_SECURE))
+    {
         b = MM_SECURE_CALLOC(words, sizeof(*b));
-    } else {
+    }
+    else
+    {
         b = MM_CALLOC(words, sizeof(*b));
     }
 
     /* 检查内存分配失败 */
-    if (bn_unlikely(b == NULL)) {
+    if (bn_unlikely(b == NULL))
+    {
         return NULL;
     }
 
     /* 拷贝原有有效数据到新缓冲区 */
-    if (a->used_words > 0) {
+    if (a->used_words > 0)
+    {
         memcpy(b, a->d, sizeof(*b) * a->used_words);
     }
 
@@ -177,7 +197,8 @@ static BN_TYPE_ULONG* bn_expand_internal(const BigNum *a, int words)
  */
 BigNum* bn_expand2(BigNum *a, int words)
 {
-    if (bn_likely(words > a->dmax)) {
+    if (bn_likely(words > a->dmax))
+    {
         BN_TYPE_ULONG *b = bn_expand_internal(a, words);
 
         if (bn_unlikely(!b))
@@ -205,9 +226,11 @@ int bn_unsigned_cmp(const BigNum *a, const BigNum *b)
     bp = b->d;
 
     if (bn_get_flags(a, BN_FLAG_CONSTTIME) &&
-        a->used_words == b->used_words) {
+        a->used_words == b->used_words)
+    {
         int ret = 0;
-        for (i = 0; i < b->used_words; i++) {
+        for (i = 0; i < b->used_words; i++)
+        {
             ret = consttime_select_bn(consttime_lt_bn(ap[i], bp[i]), -1, ret);
             ret = consttime_select_bn(consttime_lt_bn(bp[i], ap[i]), 1, ret);
         }
@@ -215,14 +238,17 @@ int bn_unsigned_cmp(const BigNum *a, const BigNum *b)
     }
 
     i = a->used_words - b->used_words;
-    if (i != 0) {
+    if (i != 0)
+    {
         return i;
     }
 
-    for (i = a->used_words - 1; i >= 0; i--) {
+    for (i = a->used_words - 1; i >= 0; i--)
+    {
         t1 = ap[i];
         t2 = bp[i];
-        if (t1 != t2) {
+        if (t1 != t2)
+        {
             return ((t1 > t2) ? 1 : -1);
         }
     }
@@ -234,16 +260,20 @@ void bn_correct_top(BigNum *a)
     BN_TYPE_ULONG *ftl;
     int tmp_top = a->used_words;
 
-    if (bn_likely(tmp_top > 0)) {
-        for (ftl = &(a->d[tmp_top]); tmp_top > 0; tmp_top--) {
+    if (bn_likely(tmp_top > 0))
+    {
+        for (ftl = &(a->d[tmp_top]); tmp_top > 0; tmp_top--)
+        {
             ftl--;
-            if (*ftl != 0) {
+            if (*ftl != 0)
+            {
                 break;
             }
         }
         a->used_words = tmp_top;
     }
-    if (a->used_words == 0) {
+    if (a->used_words == 0)
+    {
         a->neg = 0;
     }
     a->flags &= ~BN_FLAG_FIXED_TOP;
@@ -263,7 +293,8 @@ int bn_is_zero(const BigNum *a)
 
 int bn_set_word(BigNum *a, BN_TYPE_ULONG w)
 {
-    if (bn_expand(a, BN_UL_BITS) == NULL) {
+    if (bn_expand(a, BN_UL_BITS) == NULL)
+    {
         return 0;
     }
     a->neg = 0;
@@ -280,9 +311,12 @@ int bn_is_negative(const BigNum *a)
 
 void bn_set_negative(BigNum *a, int b)
 {
-    if (b && !bn_is_zero(a)) {
+    if (b && !bn_is_zero(a))
+    {
         a->neg = 1;
-    } else {
+    }
+    else
+    {
         a->neg = 0;
     }
 }
@@ -291,15 +325,18 @@ BigNum* bn_dup(const BigNum *a)
 {
     BigNum *t;
 
-    if (a == NULL) {
+    if (a == NULL)
+    {
         return NULL;
     }
 
     t = bn_get_flags(a, BN_FLAG_SECURE) ? bn_secure_new() : bn_new();
-    if (t == NULL) {
+    if (t == NULL)
+    {
         return NULL;
     }
-    if (!bn_copy(t, a)) {
+    if (!bn_copy(t, a))
+    {
         bn_free(t);
         return NULL;
     }
@@ -312,14 +349,17 @@ BigNum* bn_copy(BigNum *a, const BigNum *b)
 
     bn_words = bn_get_flags(b, BN_FLAG_CONSTTIME) ? b->dmax : b->used_words;
 
-    if (bn_unlikely(a == b)) {
+    if (bn_unlikely(a == b))
+    {
         return a;
     }
-    if (bn_unlikely(bn_words_expend(a, bn_words) == NULL)) {
+    if (bn_unlikely(bn_words_expend(a, bn_words) == NULL))
+    {
         return NULL;
     }
 
-    if (bn_likely(b->used_words > 0)) {
+    if (bn_likely(b->used_words > 0))
+    {
         memcpy(a->d, b->d, sizeof(BN_TYPE_ULONG) * bn_words);
     }
     a->neg = b->neg;
@@ -391,7 +431,8 @@ static bn_inline int bn_num_bits_consttime(const BigNum *a)
     int j, ret;
     unsigned int mask, past_i;
 
-    for (j = 0, past_i = 0, ret = 0; j < a->dmax; j++) {
+    for (j = 0, past_i = 0, ret = 0; j < a->dmax; j++)
+    {
         mask = consttime_eq_int(i, j);
 
         ret += BN_UL_BITS & (~mask & ~past_i);
@@ -409,11 +450,13 @@ int bn_num_bits(const BigNum *a)
 {
     int i = a->used_words - 1;
 
-    if (a->flags & BN_FLAG_CONSTTIME) {
+    if (a->flags & BN_FLAG_CONSTTIME)
+    {
         return bn_num_bits_consttime(a);
     }
 
-    if (bn_unlikely(bn_is_zero(a))) {
+    if (bn_unlikely(bn_is_zero(a)))
+    {
         return 0;
     }
     return ((i * BN_UL_BITS) + bn_num_bits_word(a->d[i]));

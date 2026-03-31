@@ -29,7 +29,8 @@ int TEST_bn_unsigned_sub()
         goto cleanup;
     }
 
-    for (case_idx = 0; case_idx < case_num; case_idx++) {
+    for (case_idx = 0; case_idx < case_num; case_idx++)
+    {
         const char *a_str = test_cases[case_idx][0];
         const char *b_str = test_cases[case_idx][1];
         const char *expected_str = test_cases[case_idx][2];
@@ -46,7 +47,8 @@ int TEST_bn_unsigned_sub()
             continue;
         }
 
-        if (bn_is_negative(a) || bn_is_negative(b)) {
+        if (bn_is_negative(a) || bn_is_negative(b))
+        {
             printf("跳过（含负数）\n");
             continue;
         }
@@ -61,7 +63,8 @@ int TEST_bn_unsigned_sub()
         }
 
         // 内存重叠(r与a)测试
-        if (case_ok) {
+        if (case_ok)
+        {
             if (!TEST_true(bn_copy(ret, a), "bn_copy(ret, a) 失败") ||
                 !TEST_true(bn_unsigned_sub(ret, ret, b), "bn_unsigned_sub(r=a, ret, b) 失败") ||
                 !TEST_BN_equal(sum, ret, "内存重叠(r与a)"))
@@ -71,7 +74,8 @@ int TEST_bn_unsigned_sub()
                 test_result = 0;
             }
 
-            if (case_ok) {
+            if (case_ok)
+            {
                 if (!TEST_true(bn_copy(ret, b), "bn_copy(ret, b) 失败") ||
                     !TEST_true(bn_unsigned_sub(ret, a, ret), "bn_unsigned_sub(r=b, a, ret) 失败") ||
                     !TEST_BN_equal(sum, ret, "内存重叠(r与b)"))
@@ -84,7 +88,8 @@ int TEST_bn_unsigned_sub()
         }
 
         // 成功
-        if (case_ok) {
+        if (case_ok)
+        {
             printf("通过 (%s -u %s)\n", a_str, b_str);
         }
     }
