@@ -5,11 +5,13 @@ BN_TYPE_ULONG bn_mul_add_words(BN_TYPE_ULONG *rp, const BN_TYPE_ULONG *ap, int n
 {
     BN_TYPE_ULONG carry = 0;
 
-    if (num <= 0) {
+    if (num <= 0)
+    {
         return carry;
     }
 
-    while (num & ~3) {
+    while (num & ~3)
+    {
         MUL_ADD(rp[0], ap[0], w, carry);
         MUL_ADD(rp[1], ap[1], w, carry);
         MUL_ADD(rp[2], ap[2], w, carry);
@@ -20,7 +22,8 @@ BN_TYPE_ULONG bn_mul_add_words(BN_TYPE_ULONG *rp, const BN_TYPE_ULONG *ap, int n
         num -= 4;
     }
 
-    while (num > 0) {
+    while (num > 0)
+    {
         MUL_ADD(rp[0], ap[0], w, carry);
 
         rp++;
@@ -35,11 +38,13 @@ BN_TYPE_ULONG bn_mul_words(BN_TYPE_ULONG *rp, const BN_TYPE_ULONG *ap, int num, 
 {
     BN_TYPE_ULONG carry = 0;
 
-    if (num <= 0) {
+    if (num <= 0)
+    {
         return carry;
     }
 
-    while (num & ~3) {
+    while (num & ~3)
+    {
         MUL(rp[0], ap[0], w, carry);
         MUL(rp[1], ap[1], w, carry);
         MUL(rp[2], ap[2], w, carry);
@@ -50,7 +55,8 @@ BN_TYPE_ULONG bn_mul_words(BN_TYPE_ULONG *rp, const BN_TYPE_ULONG *ap, int num, 
         num -= 4;
     }
 
-    while (num > 0) {
+    while (num > 0)
+    {
         MUL(rp[0], ap[0], w, carry);
 
         rp++;
@@ -63,11 +69,13 @@ BN_TYPE_ULONG bn_mul_words(BN_TYPE_ULONG *rp, const BN_TYPE_ULONG *ap, int num, 
 
 void bn_sqr_words(BN_TYPE_ULONG *r, const BN_TYPE_ULONG *a, int n)
 {
-    if (n <= 0) {
+    if (n <= 0)
+    {
         return;
     }
 
-    while (n & ~3) {
+    while (n & ~3)
+    {
         SQR(r[0], r[1], a[0]);
         SQR(r[2], r[3], a[1]);
         SQR(r[4], r[5], a[2]);
@@ -78,7 +86,8 @@ void bn_sqr_words(BN_TYPE_ULONG *r, const BN_TYPE_ULONG *a, int n)
         n -= 4;
     }
 
-    while (n > 0) {
+    while (n > 0)
+    {
         SQR(r[0], r[1], a[0]);
 
         a++;
@@ -90,7 +99,8 @@ void bn_sqr_words(BN_TYPE_ULONG *r, const BN_TYPE_ULONG *a, int n)
 BN_TYPE_ULONG bn_add_words(BN_TYPE_ULONG *r, const BN_TYPE_ULONG *a, const BN_TYPE_ULONG *b, int n)
 {
     // 边界检查
-    if (n <= 0) {
+    if (n <= 0)
+    {
         return (BN_TYPE_ULONG)0;
     }
 
@@ -98,7 +108,8 @@ BN_TYPE_ULONG bn_add_words(BN_TYPE_ULONG *r, const BN_TYPE_ULONG *a, const BN_TY
     BN_TYPE_ULONG c = 0, limb = 0, tmp = 0;
 
     // 批量处理4个字
-    while (n & ~3) {
+    while (n & ~3)
+    {
         // 第0个字: a[0] + b[0] + 进位
         tmp = a[0];
         /* 1.加上上一轮的进位：
@@ -152,7 +163,8 @@ BN_TYPE_ULONG bn_add_words(BN_TYPE_ULONG *r, const BN_TYPE_ULONG *a, const BN_TY
     }
 
     // 处理剩余不足4个字
-    while (n > 0) {
+    while (n > 0)
+    {
         tmp = a[0];
         tmp = (tmp + c) & BN_MASK;
         c = (tmp < c);
@@ -189,11 +201,13 @@ BN_TYPE_ULONG bn_sub_words(BN_TYPE_ULONG *r, const BN_TYPE_ULONG *a, const BN_TY
     BN_TYPE_ULONG t1, t2;
     int c = 0;
 
-    if (n <= 0) {
+    if (n <= 0)
+    {
         return (BN_TYPE_ULONG)0;
     }
 
-    while (n & ~3) {
+    while (n & ~3)
+    {
         // 第0个字: a[0] - b[0] - 借位
         /* 取当前被减数a */
         t1 = a[0];
@@ -243,7 +257,8 @@ BN_TYPE_ULONG bn_sub_words(BN_TYPE_ULONG *r, const BN_TYPE_ULONG *a, const BN_TY
         n -= 4;
     }
 
-    while (n) {
+    while (n)
+    {
         // 第1个字
         t1 = a[0];
         t2 = (t1 - c) & BN_MASK;

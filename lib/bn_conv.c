@@ -10,27 +10,32 @@ int bn_dec2bn(BigNum **bn, const char *a)
     int neg = 0;
     int num, i, j;
 
-    if (a == NULL || a[0] == '\0') {
+    if (a == NULL || a[0] == '\0')
+    {
         return 0;
     }
 
-    if (a[0] == '-') {
+    if (a[0] == '-')
+    {
         neg = 1;
         a++;
     }
 
     /* 统计数字位数: 遍历字符串，仅统计纯数字位，且限制i<=INT_MAX/4(防内存溢出) */
-    for (i = 0; i <= INT_MAX / 4 && bn_is_digit(a[i]); i++) {
+    for (i = 0; i <= INT_MAX / 4 && bn_is_digit(a[i]); i++)
+    {
         continue;
     }
 
-    if (i == 0 || i > INT_MAX / 4) {
+    if (i == 0 || i > INT_MAX / 4)
+    {
         goto err;
     }
 
     /* 计算字符串总长度 数字位+符号位 */
     num = i + neg;
-    if (bn == NULL) {
+    if (bn == NULL)
+    {
         return num;
     }
 
@@ -38,17 +43,22 @@ int bn_dec2bn(BigNum **bn, const char *a)
      * 将i位数字按 BN_DEC_NUM 位分块转换，减少大数运算次数
      * BN_DEC_NUM: 单次转换的十进制位数，适配BN_TYPE_ULONG存储上线
      */
-    if (*bn == NULL) {
-        if ((ret = bn_new()) == NULL) {
+    if (*bn == NULL)
+    {
+        if ((ret = bn_new()) == NULL)
+        {
             return 0;
         }
-    } else {
+    }
+    else
+    {
         ret = *bn;
         bn_zero(ret);
     }
 
     /* 按数字位数(i*4位二进制，保守估计)扩容，避免频繁内存重分配 */
-    if (bn_expand(ret, i * 4) == NULL) {
+    if (bn_expand(ret, i * 4) == NULL)
+    {
         goto err;
     }
 
@@ -89,17 +99,21 @@ int bn_dec2bn(BigNum **bn, const char *a)
      *   数值关系：98765432109876543210 = 5 × 2^64 + 6531711741328785130
      */
     j = BN_DEC_NUM - i % BN_DEC_NUM;
-    if (j == BN_DEC_NUM) {  // 如果i整除BN_DEC_NUM则无需补齐
+    if (j == BN_DEC_NUM)   // 如果i整除BN_DEC_NUM则无需补齐
+    {
         j = 0;
     }
     limb = 0;
-    while (--i >= 0) {
+    while (--i >= 0)
+    {
         limb *= 10;
         limb += *a - '0';
         a++;
-        if (++j == BN_DEC_NUM) {                    // 满 BN_DEC_NUM 位后加入bn中
+        if (++j == BN_DEC_NUM)  // 满 BN_DEC_NUM 位后加入bn中
+        {
             if (!bn_mul_word(ret, BN_DEC_CONV) ||   // 将当前bn的d数组左移 BN_DEC_NUM 位，相当于增加一个d[0]字
-                !bn_add_word(ret, limb)) {          // 加上当前字
+                !bn_add_word(ret, limb))            // 加上当前字
+            {
                 goto err;
             }
             limb = 0;   // 重置段缓冲
@@ -110,14 +124,16 @@ int bn_dec2bn(BigNum **bn, const char *a)
     /* 去掉高位的零，表示实际使用的word数 */
     bn_correct_top(ret);
     *bn = ret;
-    if (ret->used_words != 0) {
+    if (ret->used_words != 0)
+    {
         ret->neg = neg;
     }
 
     return num;
 
 err:
-    if (*bn == NULL) {
+    if (*bn == NULL)
+    {
         bn_free(ret);
     }
     return 0;
@@ -145,28 +161,37 @@ char* bn_bn2dec(const BigNum *a)
     bn_data_num = num / BN_DEC_NUM + 1;
     bn_data = MM_MALLOC_ARRAY(bn_data_num, sizeof(BN_TYPE_ULONG));
     buf = MM_MALLOC(tbytes);
-    if (buf == NULL || bn_data == NULL) {
+    if (buf == NULL || bn_data == NULL)
+    {
         goto err;
     }
-    if ((t = bn_dup(a)) == NULL) {
+    if ((t = bn_dup(a)) == NULL)
+    {
         goto err;
     }
 
     p = buf;
     lp = bn_data;
-    if (bn_is_zero(t)) {
+    if (bn_is_zero(t))
+    {
         *p++ = '0';
         *p++ = '\0';
-    } else {
-        if (bn_is_negative(t)) {
+    }
+    else
+    {
+        if (bn_is_negative(t))
+        {
             *p++ = '-';
         }
-        while (!bn_is_zero(t)) {
-            if (lp - bn_data >= bn_data_num) {
+        while (!bn_is_zero(t))
+        {
+            if (lp - bn_data >= bn_data_num)
+            {
                 goto err;
             }
             *lp = bn_div_word(t, BN_DEC_CONV);
-            if (*lp == (BN_TYPE_ULONG)-1) {
+            if (*lp == (BN_TYPE_ULONG)-1)
+            {
                 goto err;
             }
             lp++;
@@ -174,14 +199,17 @@ char* bn_bn2dec(const BigNum *a)
         lp--;
 
         n = snprintf(p, tbytes - (p - buf), BN_DEC_FMT1, *lp);
-        if (n < 0) {
+        if (n < 0)
+        {
             goto err;
         }
         p += n;
-        while (lp != bn_data) {
+        while (lp != bn_data)
+        {
             lp--;
             n = snprintf(p, tbytes - (p - buf), BN_DEC_FMT2, *lp);
-            if (n < 0) {
+            if (n < 0)
+            {
                 goto err;
             }
             p += n;
