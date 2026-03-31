@@ -47,6 +47,8 @@ set(TEST_UTILS_SRC
 set(TEST_FILES
     "bn_unsigned_add_test.c"
     "bn_unsigned_sub_test.c"
+    "bn_add_test.c"
+    "bn_sub_test.c"
 )
 # 批量配置所有测试程序
 foreach(TEST_FILE ${TEST_FILES})

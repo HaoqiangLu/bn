@@ -20,9 +20,11 @@ void* mm_malloc(size_t num, const char *file, int line)
 {
     void *ptr;
 
-    if (malloc_impl != mm_malloc) {
+    if (malloc_impl != mm_malloc)
+    {
         ptr = malloc_impl(num, file, line);
-        if (ptr != NULL || num == 0) {
+        if (ptr != NULL || num == 0)
+        {
             return ptr;
         }
         goto err;
@@ -36,12 +38,14 @@ void* mm_malloc(size_t num, const char *file, int line)
      * 仅在必要时才设置这个标志为(allow_customize)
      * 以避免在每次内存分配时都对同一个缓存执行写操作，带来性能损耗
      */
-    if (allow_customize) {
+    if (allow_customize)
+    {
         allow_customize = 0;
     }
 
     ptr = malloc(num);
-    if (bn_likely(ptr != NULL)) {
+    if (bn_likely(ptr != NULL))
+    {
         return ptr;
     }
 
@@ -53,19 +57,23 @@ void* mm_realloc(void *addr, size_t num, const char *file, int line)
 {
     void *ptr;
 
-    if (realloc_impl != mm_realloc) {
+    if (realloc_impl != mm_realloc)
+    {
         ptr = realloc_impl(addr, num, file, line);
-        if (ptr != NULL || num == 0) {
+        if (ptr != NULL || num == 0)
+        {
             return ptr;
         }
         goto err;
     }
 
-    if (addr == NULL) {
+    if (addr == NULL)
+    {
         return mm_malloc(num, file, line);
     }
 
-    if (num == 0) {
+    if (num == 0)
+    {
         mm_free(addr, file, line);
         return NULL;
     }
@@ -78,7 +86,8 @@ err:
 
 void mm_free(void *ptr, const char *file, int line)
 {
-    if (free_impl != mm_free) {
+    if (free_impl != mm_free)
+    {
         free_impl(ptr, file, line);
         return;
     }
@@ -91,7 +100,8 @@ void* mm_zalloc(size_t num, const char *file, int line)
     void *ptr;
 
     ptr = mm_malloc(num, file, line);
-    if (ptr != NULL) {
+    if (ptr != NULL)
+    {
         memset(ptr, 0, num);
     }
     return ptr;
@@ -101,7 +111,8 @@ void* mm_calloc(size_t num, size_t size, const char *file, int line)
 {
     size_t bytes;
 
-    if (bn_unlikely(!bn_size_mul(num, size, &bytes, file, line))) {
+    if (bn_unlikely(!bn_size_mul(num, size, &bytes, file, line)))
+    {
         return NULL;
     }
     return mm_zalloc(bytes, file, line);
@@ -111,7 +122,8 @@ void* mm_malloc_arr(size_t num, size_t size, const char *file, int line)
 {
     size_t bytes;
 
-    if (bn_unlikely(!bn_size_mul(num, size, &bytes, file, line))) {
+    if (bn_unlikely(!bn_size_mul(num, size, &bytes, file, line)))
+    {
         return NULL;
     }
     return mm_malloc(bytes, file, line);
@@ -121,7 +133,8 @@ void* mm_realloc_arr(void *addr, size_t num, size_t size, const char *file, int 
 {
     size_t bytes;
 
-    if (bn_unlikely(!bn_size_mul(num, size, &bytes, file, line))) {
+    if (bn_unlikely(!bn_size_mul(num, size, &bytes, file, line)))
+    {
         return NULL;
     }
     return mm_realloc(addr, bytes, file, line);
@@ -134,10 +147,12 @@ void mm_cleanse(void *ptr, size_t len)
 
 void mm_clear_free(void *addr, size_t num, const char *file, int line)
 {
-    if (addr == NULL) {
+    if (addr == NULL)
+    {
         return;
     }
-    if (num) {
+    if (num)
+    {
         mm_cleanse(addr, num);
     }
     mm_free(addr, file, line);
