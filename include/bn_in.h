@@ -65,12 +65,14 @@
     #define BN_DEC_FMT2 "%019lu"
 #endif
 
-#  if defined(__SIZEOF_INT128__) && __SIZEOF_INT128__==16 && \
+#if 0
+#if defined(__SIZEOF_INT128__) && __SIZEOF_INT128__==16 && \
       (BN_PLATFORM_WORDSIZE == 64)
-#   define BN_UMULT_HIGH(a,b)          (((BN_TYPE_ULLONG)(a)*(b))>>64)
-#   define BN_UMULT_LOHI(low,high,a,b) ({           \
-        BN_TYPE_ULLONG ret=(BN_TYPE_ULLONG)(a)*(b); \
-        (high)=ret>>64; (low)=ret;      })
+#define BN_UMULT_HIGH(a,b)          (((BN_TYPE_ULLONG)(a)*(b))>>64)
+#define BN_UMULT_LOHI(low,high,a,b) ({                  \
+            BN_TYPE_ULLONG ret=(BN_TYPE_ULLONG)(a)*(b); \
+            (high)=ret>>64; (low)=ret;      })
+#endif
 #endif
 
 struct bn_num_st
