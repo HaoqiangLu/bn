@@ -91,6 +91,10 @@ struct bn_num_st
 #define BN_FLAG_FIXED_TOP 0
 
 
+#define BN_MUL_RECURSIVE_SIZE_NORMAL (16)
+#define BN_MUL_LOW_RECURSIVE_SIZE_NORMAL (32)
+
+
 BN_TYPE_ULONG bn_add_words(BN_TYPE_ULONG *r, const BN_TYPE_ULONG *a, const BN_TYPE_ULONG *b, int n);
 BN_TYPE_ULONG bn_mul_add_words(BN_TYPE_ULONG *rp, const BN_TYPE_ULONG *ap, int num, BN_TYPE_ULONG w);
 BN_TYPE_ULONG bn_mul_words(BN_TYPE_ULONG *rp, const BN_TYPE_ULONG *ap, int num, BN_TYPE_ULONG w);

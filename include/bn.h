@@ -108,6 +108,13 @@ int bn_unsigned_sub(BigNum *r, const BigNum *a, const BigNum *b);
 int bn_add(BigNum *r, const BigNum *a, const BigNum *b);
 int bn_sub(BigNum *r, const BigNum *a, const BigNum *b);
 
+/* bn_mul.c */
+void bn_mul_low_normal(BN_TYPE_ULONG *r, BN_TYPE_ULONG *a, BN_TYPE_ULONG *b, int n);
+void bn_mul_normal(BN_TYPE_ULONG *r,
+                   BN_TYPE_ULONG *a, int na,
+                   BN_TYPE_ULONG *b, int nb);
+int bn_mul_fixed_top(BigNum *r, BigNum *a, BigNum *b, BnCtx *ctx);
+
 /* bn_conv.c */
 int bn_dec2bn(BigNum **bn, const char *a);
 char* bn_bn2dec(const BigNum *a);

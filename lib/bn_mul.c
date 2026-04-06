@@ -1,5 +1,116 @@
 #include "bn_in.h"
 
+/*
+ * 以下是 bn_add_words() 和 bn_sub_words() 的专用变体实现。
+ * 这组函数支持对**长度不同**的大数数组执行运算。
+ * 数组长度通过两个参数定义：
+ * cl：公共长度（本质是 len(a) 与 len(b) 中的较小值 min(len(a), len(b))）
+ * dl：两个数组的长度差值，计算方式为 len(a) - len(b)
+ * 所有长度的单位均为 BN_ULONG 机器字。
+ * 对于需要传入结果数组 r 的运算，r 的长度必须 ≥ cl + abs(dl)。
+ * 后续为支持汇编优化的系统实现对应汇编版本后，这些函数大概率会移至 bn_asm.c 中。
+ */
+// TODO
+BN_TYPE_ULONG bn_sub_part_words(BN_TYPE_ULONG *r,
+                                BN_TYPE_ULONG *a,
+                                BN_TYPE_ULONG *b,
+                                int cl, int dl)
+{}
+
+// TODO
+void bn_mul_recursive(BN_TYPE_ULONG *r,
+                      BN_TYPE_ULONG *a,
+                      BN_TYPE_ULONG *b,
+                      int n2, int dna, int dnb,
+                      BN_TYPE_ULONG *t)
+{}
+
+/**
+ * @brief 大数乘法
+ *
+ * @param[out] r   乘法结果
+ * @param[in]  a   被乘数
+ * @param[in]  b   乘数
+ * @param[in]  ctx 大数上下文
+ * @return int 成功1；失败0
+ */
+int bn_mul(BigNum *r, const BigNum *a, const BigNum *b, BnCtx *ctx)
+{
+    int ret = bn_mul_fixed_top(r, a, b, ctx);
+    bn_correct_top(r);
+    return ret;
+}
+
+/**
+ * @brief 大数乘法实际执行函数
+ *      // TODO 完善中...
+ * @param[out] r   乘法结果
+ * @param[in]  a   被乘数
+ * @param[in]  b   乘数
+ * @param[in]  ctx 大数上下文
+ * @return int 成功1；失败0
+ */
+int bn_mul_fixed_top(BigNum *r, BigNum *a, BigNum *b, BnCtx *ctx)
+{
+    int ret = 0;
+    int top, al, bl;
+    BigNum *rr; // 计算结果临时保存的对象
+
+    al = a->used_words; // a的d数组元素个数
+    bl = b->used_words; // b的d数组元素个数
+    if (al == 0 || bl == 0)
+    {
+        bn_zero(r);
+        return 1;
+    }
+    top = al + bl;  // 两数相乘结果长度 = a的"长度" + b的"长度"
+
+    bn_ctx_start(ctx);
+    if (r == a || r  == b)  // 若r与a或b是同一地址空间
+    {
+        rr = bn_ctx_get(ctx);   // rr则从池中取一个
+        if (rr == NULL) goto err;
+    }
+    else                    // 若r是独立地址空间
+    {
+        rr = r; // rr直接使用r的地址空间
+    }
+
+    // 对结果对象rr进行按word扩容
+    if (bn_words_expend(rr, top) == NULL)
+        goto err;
+    rr->used_words = top;
+    bn_mul_normal(rr->d, a->d, al, b->d, bl);
+
+    rr->neg = a->neg ^ a->neg;  // 异或计算符号位，相同为0，不同为1
+    bn_set_flags(rr, BN_FLAG_FIXED_TOP);
+    // 若rr使用r的地址空间则不进行拷贝，若不同则将rr拷贝给r
+    if (r != rr && bn_copy(r, rr) == NULL)
+        goto err;
+    ret = 1;
+
+err:
+    bn_ctx_end(ctx);
+    return ret;
+}
+
+/**
+ * @brief 大数朴素乘法（通用标准版，计算完整乘积）
+ *
+ * 计算两个大数数组 a、b 的完整乘积，结果存入 r 数组，不截断任何高位，
+ * 是最基础、通用的大数乘法实现，适用于所有长度的大数相乘。
+ * 内部通过交换优化保证长数组在前、批量4字处理提升效率，遵循大数低位在前存储规则。
+ *
+ * @param[out] r  输出数组，用于存储完整乘积，长度必须 ≥ na + nb 个 BN_ULONG
+ * @param[in]  a  被乘数的大数机器字数组（
+ * @param[in]  na 被乘数 a 的有效机器字个数（数组长度）
+ * @param[in]  b  乘数的大数机器字数组
+ * @param[in]  nb 乘数 b 的有效机器字个数（数组长度）
+ *
+ * @note 1. 计算完整乘积，结果长度为 na + nb 个机器字，无高位截断
+ * @note 2. 内部自动交换 a/b 保证 na ≥ nb，减少乘法循环次数
+ * @note 3. 批量处理 4 个机器字，降低循环分支开销，提升执行效率
+ */
 void bn_mul_normal(BN_TYPE_ULONG *r,
                    BN_TYPE_ULONG *a, int na,
                    BN_TYPE_ULONG *b, int nb)
@@ -62,6 +173,57 @@ void bn_mul_normal(BN_TYPE_ULONG *r,
     }
 }
 
+/**
+ * @brief Karatsuba 递归版的大数低位截断乘法
+ *
+ * 只计算 a × b 的低 n2 个机器字，高位直接丢弃
+ * 是 bn_mul_low_normal 的递归优化版
+ *
+ * @param[out] r  仅存乘积的低 n2 个机器字，长度≥n2
+ * @param[in]  a  被乘数，长度 n2
+ * @param[in]  b  乘数，长度 n2
+ * @param[in]  n2 a/b的长度，也是r的输出长度
+ * @param[in]  t  缓冲区，长度必须≥2×n2
+ *
+ * @note 当前暂未使用
+ */
+void bn_mul_low_recursive(BN_TYPE_ULONG *r,
+                          BN_TYPE_ULONG *a,
+                          BN_TYPE_ULONG *b, int n2,
+                          BN_TYPE_ULONG *t)
+{
+    int n= n2 / 2;
+
+    bn_mul_recursive(r, a, b, n, 0, 0, t);
+    if (n >= BN_MUL_LOW_RECURSIVE_SIZE_NORMAL)
+    {
+        bn_mul_low_recursive(&(t[0]), &(a[0]), &(b[n]), n, &(t[n2]));
+        bn_add_words(&(r[n]), &(r[n]), &(t[0]), n);
+        bn_mul_low_recursive(&(t[0]), &(a[n]), &(b[0]), n, &(t[n2]));
+        bn_add_words(&(r[n]), &(r[n]), &(t[0]), n);
+    }
+    else
+    {
+        bn_mul_low_normal(&(t[0]), &(a[0]), &(b[n]), n);
+        bn_mul_low_normal(&(t[n]), &(a[n]), &(b[0]), n);
+        bn_add_words(&(r[n]), &(r[n]), &(t[0]), n);
+        bn_add_words(&(r[n]), &(r[n]), &(t[0]), n);
+    }
+}
+
+/**
+ * @brief 大数低位截断乘法（仅计算乘积的低 n 个机器字）
+ *
+ * 计算两个大数数组 a 与 b 的乘积，只保留结果的低 n 个 BN_TYPE_ULONG 机器字，
+ * 高位部分直接丢弃，不处理进位扩展，计算量远小于完整乘法 bn_mul_normal。
+ *
+ * @param[out] r  输出数组，用于存储乘积的低 n 个机器字，长度必须 ≥ n
+ * @param[in]  a  被乘数的大数机器字数组
+ * @param[in]  b  乘数的大数机器字数组
+ * @param[in]  n  需保留的机器字个数（数组元素数），决定计算范围与输出长度
+ *
+ * @note 当前仅在 bn_mul_low_recursive 中使用，但 bn_mul_low_recursive 还并未使用
+ */
 void bn_mul_low_normal(BN_TYPE_ULONG *r, BN_TYPE_ULONG *a, BN_TYPE_ULONG *b, int n)
 {
     bn_mul_words(r, a, b, b[0]);
