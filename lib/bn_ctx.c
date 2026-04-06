@@ -370,3 +370,106 @@ static void bn_pool_finish(BnPool *pool)
         pool->head = pool->curr;
     }
 }
+
+/**
+ * @brief 从 BnPool 池中申请一个空闲BigNum临时变量
+ *
+ * 池满时自动批量扩容，每次固定扩容16个 BigNum，避免频繁malloc，降低运算内存分配开销
+ *
+ * @param[in] pool 指向待分配的大数池(BnPool)
+ * @param[in] flag 标志位，核心用于控制是否创建安全内存 BigNum
+ * @return BigNum*
+ */
+static BigNum* bn_pool_get(BnPool *pool, int flag)
+{
+    BigNum *bn;
+    int loop;
+
+    if (pool->used == pool->size)   /* 池已满 → 自动扩容 */
+    {
+        // 分配新的 pool item节点
+        BnPoolItem *item = MM_MALLOC(sizeof(BnPoolItem));
+        if (item == NULL)
+        {
+            return NULL;
+        }
+        // 初始化节点内16个 BigNum，并设置安全内存标志（如有）
+        for (loop = 0, bn = item->vals; loop++ < BN_CTX_POOL_SIZE; bn++)
+        {
+            bn_init(bn);    // 初始化 BigNum 结构体
+            if(flag & BN_FLAG_SECURE)   // 若开启安全内存，设置安全标志
+            {
+                bn_set_flags(bn, BN_FLAG_SECURE);
+            }
+        }
+        // 新节点接入双向链表
+        item->prev = pool->tail;
+        item->next = NULL;
+
+        if (pool->head == NULL) // 池为空，首次扩容
+        {
+            pool->head = pool->curr = pool->tail = item;
+        }
+        else                    // 池非空，追加到链表尾部
+        {
+            pool->tail->next = item;
+            pool->tail = item;
+            pool->curr = item;
+        }
+        // 更新池容量和已用数，返回新节点第一个 BigNum
+        pool->size += BN_CTX_POOL_SIZE;
+        pool->used++;
+        return item->vals;
+    }
+
+    // 首次分配(used=0)，curr 指向链表头节点
+    if (!pool->used)
+    {
+        pool->curr = pool->head;
+    }
+    // 当前节点16个 BigNum 用完，切换到下一个节点
+    else if ((pool->used % BN_CTX_POOL_SIZE) == 0)
+    {
+        pool->curr = pool->curr->next;
+    }
+    /*
+     * 计算偏移，返回空闲 BigNum （used先取值再自增）
+     * 偏移计算：(p->used) % 16 → 定位当前节点内的第 N 个 BigNum
+     * used++：分配后标记该 BigNum 已被占用。
+     */
+    return pool->curr->vals + ((pool->used++) % BN_CTX_POOL_SIZE);
+}
+
+/**
+ * @brief 归还指定数量的临时 BigNum 到内存池
+ *
+ * 仅重置指针与计数、不释放物理内存
+ * 和 bn_pool_get 配对实现后进先出的栈式内存管理
+ *
+ * @param[in] pool 待回收的大数内存池
+ * @param[in] num 需要归还的 BigNum 数量（必须是最近连续分配的个数）
+ */
+static void bn_pool_release(BnPool *pool, unsigned int num)
+{
+    // 计算最后一个已分配 BigNum 在当前 pool item 中的偏移
+    unsigned int offset = (pool->used - 1) % BN_CTX_POOL_SIZE;
+    // 预减已分配计数，批量标记为空闲
+    pool->used -= num;
+    // 循环逐个回退，完整 num 个 BigNum的归还
+    while (num--)
+    {
+        // 当前 item 的偏移已到0，该 item 所有BigNum归还完毕
+        if (offset == 0)
+        {
+            // 偏移重置为当前 item 最后一个位置
+            offset = BN_CTX_POOL_SIZE - 1;
+            // curr 切换到上一个 pool item
+            pool->curr = pool->curr->prev;
+        }
+        // 偏移未到0，直接往前退一个
+        else
+        {
+            offset--;
+        }
+    }
+}

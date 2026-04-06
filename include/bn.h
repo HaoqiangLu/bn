@@ -79,6 +79,8 @@
 #define BN_FLAG_SECURE 0x08
 
 /* bn_lib.c */
+void bn_set_flags(BigNum *a, int n);
+int bn_get_flags(const BigNum *a, int n);
 void bn_clear_free(BigNum *a);
 void bn_free(BigNum *a);
 void bn_init(BigNum *a);
@@ -119,5 +121,13 @@ BN_TYPE_ULONG bn_div_word(BigNum *a, BN_TYPE_ULONG w);
 /* bn_shift.c */
 int bn_left_shift_fixed_top(BigNum *r, const BigNum *a, int n);
 int bn_left_shift(BigNum *r, const BigNum *a, int n);
+
+/* bn_ctx.c */
+BnCtx* bn_ctx_new(void);
+BnCtx* bn_ctx_secure_new(void);
+void bn_ctx_free(BnCtx *ctx);
+void bn_ctx_start(BnCtx *ctx);
+void bn_ctx_end(BnCtx *ctx);
+BigNum* bn_ctx_get(BnCtx *ctx);
 
 #endif /* _BN_H_ */
