@@ -10,7 +10,7 @@
  * 对于需要传入结果数组 r 的运算，r 的长度必须 ≥ cl + abs(dl)。
  * 后续为支持汇编优化的系统实现对应汇编版本后，这些函数大概率会移至 bn_asm.c 中。
  */
-// TODO
+
 /**
  * @brief 无符号不等长大数字组减法函数
  *
@@ -23,6 +23,8 @@
  * @param[in]  cl 公共长度，即 min(len(a), len(b))
  * @param[in]  dl 长度查，dl = len(a) - len(b)
  * @return BN_TYPE_ULONG 最终借位（0无借位/1有借位）
+ *
+ * @note 在被使用前需要做检查，当前使用前都已确保 a > b
  */
 BN_TYPE_ULONG bn_sub_part_words(BN_TYPE_ULONG *r,
                                 BN_TYPE_ULONG *a,
@@ -147,13 +149,88 @@ BN_TYPE_ULONG bn_sub_part_words(BN_TYPE_ULONG *r,
     return c;
 }
 
-// TODO
+/*
+ * Karatsuba递归乘法（参考：Knuth, The Art of Computer Programming, Vol.2）
+ *
+ * r 的长度为 2*n2 个 BN_TYPE_ULONG 字
+ * a 和 b 的长度均为 n2 个 BN_TYPE_ULONG 字
+ * n2 必须是 2 的幂
+ * t 的长度必须为 2*n2 个 BN_TYPE_ULONG 字
+ * dnX 可以不为正数，但 n2/2 + dnX 必须为正数
+ * 计算逻辑：
+ *      a0 * b0
+ *      a0 * b0 + a1 * b1 + (a0 - a1) * (b1 - b0)
+ *      a1 * b1
+ */
+/**
+ * @brief Karatsuba 分治乘法
+ *
+ * 对长度为2的幂的两个大数数组，执行 Karatsuba 递归乘法
+ * 把传统 O(n^2) 乘法优化到 O(n^log₂3) ≈ O(n¹・⁵⁸⁵)
+ *
+ * @param[out] r   乘积数组，长度必须是 2*n2
+ * @param[in]  a   被乘数大数字组
+ * @param[in]  b   乘数大数字组
+ * @param[in]  n2  a、b 的基础长度，必须是 2 的幂
+ * @param[in]  dna a 的有效长度偏移：a 实际长度 = n2 + dna
+ * @param[in]  dnb b 的有效长度偏移：b 实际长度 = n2 + dnb
+ * @param[in]  t   临时缓冲区，至少 2*n2 长度
+ *
+ * // TODO 未加comba算法
+ */
 void bn_mul_recursive(BN_TYPE_ULONG *r,
                       BN_TYPE_ULONG *a,
                       BN_TYPE_ULONG *b,
                       int n2, int dna, int dnb,
                       BN_TYPE_ULONG *t)
-{}
+{
+    int n = n2 / 2; // 分治后每一半的长度
+    int c1, c2;
+    int tna = n + dna, tnb = n + dnb; // a0 和 b0 的实际有效长度
+    unsigned int neg, zero;
+    BN_TYPE_ULONG ln, lo, *p;
+
+    // 长度小于阈值，直接用朴素乘法，避免递归开销
+    if (n2 < BN_MUL_RECURSIVE_SIZE_NORMAL)
+    {
+        bn_mul_normal(r, a, n2 + dna, b, n2 + dnb);
+        if ((dna + dnb) < 0)
+        {
+            memset(&r[2 * n2 + dna + dnb], 0, sizeof(BN_TYPE_ULONG) * (-(dna + dnb)));
+        }
+        return;
+    }
+    /*
+     * 计算 Karatsuba 核心差值乘积
+     * r = (a0 - a1) * (b1 - b0)
+     */
+    c1 = bn_cmp_part_words(a, &a[n], tna, n - tna);
+    c2 = bn_cmp_part_words(&b[n], b, tnb, tnb - n);
+    zero = neg = 0;
+    /*
+     *   ┏━━━━━━┳━━━━┳━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┓
+     *   ┃ code ┃ c1 ┃ c2 ┃    Meaning     ┃    Calculation     ┃  sign  ┃
+     *   ┣━━━━━━╋━━━━╋━━━━╋━━━━━━━━━━━━━━━━╋━━━━━━━━━━━━━━━━━━━━╋━━━━━━━━┫
+     *   ┃  -4  ┃ -1 ┃ -1 ┃ A0<A1, B1<B0   ┃  (A1−A0)×(B0−B1)   ┃   +    ┃
+     *   ┣━━━━━━╋━━━━╋━━━━╋━━━━━━━━━━━━━━━━╋━━━━━━━━━━━━━━━━━━━━╋━━━━━━━━┫
+     *   ┃  -3  ┃ -1 ┃  0 ┃ A0<A1, B1=B0   ┃         0          ┃ zero=1 ┃
+     *   ┣━━━━━━╋━━━━╋━━━━╋━━━━━━━━━━━━━━━━╋━━━━━━━━━━━━━━━━━━━━╋━━━━━━━━┫
+     *   ┃  -2  ┃ -1 ┃  1 ┃ A0<A1, B1>B0   ┃  (A1−A0)×(B1−B0)   ┃   -    ┃
+     *   ┣━━━━━━╋━━━━╋━━━━╋━━━━━━━━━━━━━━━━╋━━━━━━━━━━━━━━━━━━━━╋━━━━━━━━┫
+     *   ┃  -1  ┃  0 ┃ -1 ┃ A0=A1          ┃         0          ┃ zero=1 ┃
+     *   ┣━━━━━━╋━━━━╋━━━━╋━━━━━━━━━━━━━━━━╋━━━━━━━━━━━━━━━━━━━━╋━━━━━━━━┫
+     *   ┃   0  ┃  0 ┃  0 ┃ A0=A1 / B1=B0  ┃         0          ┃ zero=1 ┃
+     *   ┣━━━━━━╋━━━━╋━━━━╋━━━━━━━━━━━━━━━━╋━━━━━━━━━━━━━━━━━━━━╋━━━━━━━━┫
+     *   ┃   1  ┃  0 ┃  1 ┃ A0=A1          ┃         0          ┃ zero=1 ┃
+     *   ┣━━━━━━╋━━━━╋━━━━╋━━━━━━━━━━━━━━━━╋━━━━━━━━━━━━━━━━━━━━╋━━━━━━━━┫
+     *   ┃   2  ┃  1 ┃ -1 ┃ A0>A1, B1<B0   ┃  (A0−A1)×(B0−B1)   ┃   -    ┃
+     *   ┣━━━━━━╋━━━━╋━━━━╋━━━━━━━━━━━━━━━━╋━━━━━━━━━━━━━━━━━━━━╋━━━━━━━━┫
+     *   ┃   3  ┃  1 ┃  0 ┃ A0>A1, B1=B0   ┃         0          ┃ zero=1 ┃
+     *   ┣━━━━━━╋━━━━╋━━━━╋━━━━━━━━━━━━━━━━╋━━━━━━━━━━━━━━━━━━━━╋━━━━━━━━┫
+     *   ┃   4  ┃  1 ┃  1 ┃ A0>A1, B1>B0   ┃  (A0−A1)×(B1−B0)   ┃   -    ┃
+     *   ┗━━━━━━┻━━━━┻━━━━┻━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━┛
+     */
+}
 
 /**
  * @brief 大数乘法

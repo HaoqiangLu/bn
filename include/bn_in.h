@@ -171,5 +171,7 @@ static bn_inline BigNum* bn_expand(BigNum *a, int bits)
     return bn_expand2((a), (bits + BN_UL_BITS - 1) / BN_UL_BITS);
 }
 
+int bn_cmp_words(const BN_TYPE_ULONG *a, const BN_TYPE_ULONG *b, int n);
+int bn_cmp_part_words(const BN_TYPE_ULONG *a, const BN_TYPE_ULONG *b, int cl, int dl);
 
 #endif /* _BN_INTERNAL_H_ */

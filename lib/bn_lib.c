@@ -461,3 +461,87 @@ int bn_num_bits(const BigNum *a)
     }
     return ((i * BN_UL_BITS) + bn_num_bits_word(a->d[i]));
 }
+
+/**
+ * @brief 相同长度 BN_TYPE_ULONG 字数组大小比较
+ *
+ * @param[in] a 比较数1
+ * @param[in] b 比较数2
+ * @param[in] n 长度
+ * @return int
+ *
+ * @note 大数乘法 / 比较场景中，两个数最高位不同的概率极高，单独优先判断
+ */
+int bn_cmp_words(const BN_TYPE_ULONG *a, const BN_TYPE_ULONG *b, int n)
+{
+    int i;
+    BN_TYPE_ULONG aa, bb;
+
+    if (bn_unlikely(n == 0))
+        return 0;
+
+    aa = a[n - 1];
+    bb = b[n - 1];
+    if (bn_likely(aa != bb))
+    {
+        return (aa > bb) ? 1 : -1;
+    }
+
+    for (i = n - 2; i >= 0; i--)
+    {
+        aa = a[i];
+        bb = b[i];
+        if (aa != bb)
+        {
+            return (aa > bb) ? 1 : -1;
+        }
+    }
+    return 0;
+}
+
+/*
+ * 下面是 bn_cmp_words() 的一个专用变体。
+ * 它支持对 长度不同 的数组执行比较操作。
+ * 数组长度通过以下两个参数描述：
+ *      cl：公共长度（本质为 min(len(a), len(b))）
+ *      dl：两数组的长度差值，计算方式为 len(a) - len(b)
+ * 所有长度的单位均为 BN_TYPE_ULONG (大数字基础字)
+ */
+
+ /**
+  * @brief 不等长大数字组比较
+  *
+  * @param a  待比较的第一个大数字组
+  * @param b  待比较的第二个大数字组
+  * @param cl 公共长度
+  * @param dl 长度差
+  * @return int
+  *     -1 : a < b
+  *      1 : a > b
+  *      0 : a = b
+  */
+int bn_cmp_part_words(const BN_TYPE_ULONG *a, const BN_TYPE_ULONG *b, int cl, int dl)
+{
+    int n, i;
+    n = cl - 1;
+
+    if (dl < 0) // 情况1：b 比 a 长（长 |dl| 个word）
+    {
+        for (i = dl; i < 0; i++)
+        {
+            // b 的高位有非0 → a<b，直接返回-1
+            if (b[n - i] != 0) return -1; // a < b
+        }
+    }
+
+    if (dl > 0) // 情况2：a 比 b 长（长 dl 个word）
+    {
+        for (i = dl; i > 0; i--)
+        {
+            // a 的高位有非0 → a>b，直接返回1
+            if (a[n + i] != 0) return 1; // a > b
+        }
+    }
+    // 超长部分全0 → 比较公共长度 cl 的部分
+    return bn_cmp_words(a, b, cl);
+}
