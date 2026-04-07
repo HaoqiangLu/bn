@@ -2,7 +2,7 @@
 
 /*
  * 以下是 bn_add_words() 和 bn_sub_words() 的专用变体实现。
- * 这组函数支持对**长度不同**的大数数组执行运算。
+ * 这组函数支持对长度不同的大数数组执行运算。
  * 数组长度通过两个参数定义：
  * cl：公共长度（本质是 len(a) 与 len(b) 中的较小值 min(len(a), len(b))）
  * dl：两个数组的长度差值，计算方式为 len(a) - len(b)
@@ -11,11 +11,141 @@
  * 后续为支持汇编优化的系统实现对应汇编版本后，这些函数大概率会移至 bn_asm.c 中。
  */
 // TODO
+/**
+ * @brief 无符号不等长大数字组减法函数
+ *
+ * 对不等长的无符号大叔字组执行减法 a-b，分公共等长部分和超长剩余部分处理
+ * 返回最终借位，结果存入数组 r
+ *
+ * @param[out] r  输出结果数组，长度必须为 cl + abs(dl)
+ * @param[in]  a  被减数字组
+ * @param[in]  b  减数字组
+ * @param[in]  cl 公共长度，即 min(len(a), len(b))
+ * @param[in]  dl 长度查，dl = len(a) - len(b)
+ * @return BN_TYPE_ULONG 最终借位（0无借位/1有借位）
+ */
 BN_TYPE_ULONG bn_sub_part_words(BN_TYPE_ULONG *r,
                                 BN_TYPE_ULONG *a,
                                 BN_TYPE_ULONG *b,
                                 int cl, int dl)
-{}
+{
+    BN_TYPE_ULONG c, t;
+
+    // 处理等长公共部分
+    c = bn_sub_words(r, a, b, cl);
+    if (dl == 0) return c;  // 等长则直接返回，无需处理剩余部分
+    // 指针后移，定位到剩余超长字的起始位置
+    r += cl;
+    a += cl;
+    b += cl;
+
+    if (dl < 0)     // b比a长
+    {
+        // 此时 a 已无剩余字，被减数剩余部分视为0，执行 0 - b[剩余] - 借位c
+        for (;;)    // 逐字处理减数剩余部分
+        {
+            t = b[0];   // 第0个字
+            r[0] = (0 - t - c) & BN_MASK;   // 0 - 当前字 + 借位，掩码保无符号
+            if (t != 0) c = 1;              // b字非0，必然产生新借位1
+            if (++dl >= 0) break;           // dl自增，耗尽则退出
+
+            t = b[1];   // 第1个字
+            r[1] = (0 - t - c) & BN_MASK;
+            if (t != 0) c = 1;
+            if (++dl >= 0) break;
+
+            t = b[2];   // 第2个字
+            r[2] = (0 - t - c) & BN_MASK;
+            if (t != 0) c = 1;
+            if (++dl >= 0) break;
+
+            t = b[3];   // 第3个字
+            r[3] = (0 - t - c) & BN_MASK;
+            if (t != 0) c = 1;
+            if (++dl >= 0) break;
+
+            b += 4; // 指针位移
+            r += 4;
+        }
+    }
+    else            // a比b长
+    {
+        // 此时 b 已无剩余字，减数剩余部分视为0，执行 a[剩余] - 借位c，分三步处理
+        // 步骤1：处理 有借位(c=1) 的情况
+        int save_dl = dl;
+        while (c)
+        {
+            // 借位规则：被减字非 0 → 借位清零；被减字为 0 → 借位保持 1
+            t = a[0];   // 第0个字
+            r[0] = (t - c) & BN_MASK;   // 被减字 - 借位
+            if (t != 0) c = 0;          // 被减字非0，借位直接清零
+            if (--dl <= 0) break;       // dl自减，耗尽则推出
+
+            t = a[1];   // 第1个字
+            r[1] = (t - c) & BN_MASK;
+            if (t != 0) c = 0;
+            if (--dl <= 0) break;
+
+            t = a[2];   // 第2个字
+            r[2] = (t - c) & BN_MASK;
+            if (t != 0) c = 0;
+            if (--dl <= 0) break;
+
+            t = a[3];   // 第3个字
+            r[3] = (t - c) & BN_MASK;
+            if (t != 0) c = 0;
+            if (--dl <= 0) break;
+
+            save_dl = dl;
+            a += 4;
+            r += 4;
+        }
+        // 步骤2：处理4字展开的剩余1-3字
+        if (dl > 0 && save_dl > dl)
+        {
+            // 补齐 4 字展开后不足 4 字的剩余部分，直接拷贝 a 的字到 r
+            switch (save_dl - dl)
+            {
+            case 1:
+                r[1] = a[1];
+                if (--dl <= 0) break;
+                /* fall through */
+            case 2:
+                r[2] = a[2];
+                if (--dl <= 0) break;
+                /* fall through */
+            case 3:
+                r[3] = a[3];
+                if (--dl <= 0) break;
+            }
+            a += 4;
+            a += 4;
+        }
+        // 步骤3：批量拷贝剩余所有字（无借位）
+        if (dl > 0)
+        {
+            // 借位已清零，剩余字直接拷贝 a 到 r 即可
+            for (;;)
+            {
+                r[0] = a[0];
+                if (--dl <= 0) break;
+
+                r[1] = a[1];
+                if (--dl <= 0) break;
+
+                r[2] = a[2];
+                if (--dl <= 0) break;
+
+                r[3] = a[3];
+                if (--dl <= 0) break;
+
+                a += 4;
+                r += 4;
+            }
+        }
+    }
+    return c;
+}
 
 // TODO
 void bn_mul_recursive(BN_TYPE_ULONG *r,
