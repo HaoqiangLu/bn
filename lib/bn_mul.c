@@ -204,7 +204,9 @@ void bn_mul_recursive(BN_TYPE_ULONG *r,
      * 计算 Karatsuba 核心差值乘积
      * r = (a0 - a1) * (b1 - b0)
      */
+    // c1：A0 与 A1 的比较结果（-1=A0<A1，0=相等，1=A0>A1）
     c1 = bn_cmp_part_words(a, &a[n], tna, n - tna);
+    // c2：B1 与 B0 的比较结果（-1=B1<B0，0=相等，1=B1>B0）
     c2 = bn_cmp_part_words(&b[n], b, tnb, tnb - n);
     zero = neg = 0;
     /*
@@ -230,6 +232,132 @@ void bn_mul_recursive(BN_TYPE_ULONG *r,
      *   ┃   4  ┃  1 ┃  1 ┃ A0>A1, B1>B0   ┃  (A0−A1)×(B1−B0)   ┃   -    ┃
      *   ┗━━━━━━┻━━━━┻━━━━┻━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━┛
      */
+    switch (c1 * 3 + c2)
+    {
+    /*
+     * 编码-4：c1=-1(A0<A1)，c2=-1(B1<B0)
+     * 计算：(A1-A0) × (B0-B1)，结果为正
+     * t[0~n-1]  ← A1 - A0
+     * t[n~2n-1] ← B0 - B1
+     */
+    case -4:
+        bn_sub_part_words(t, &a[n], a, tna, tna - n);       // A1 减 A0
+        bn_sub_part_words(&t[n], b, &b[n], tnb, n - tnb);   // B0 减 B1
+        break;
+    /*
+     * 编码-3：c1=-1(A0<A1)，c2=0(B1=B0)
+     * B1-B0=0 → 整个交叉项乘积为0
+     */
+    case -3:
+        zero = 1;   // 标记结果为0，跳过乘法计算
+        break;
+    /*
+     * 编码-2：c1=-1(A0<A1)，c2=1(B1>B0)
+     * 计算：(A1-A0) × (B1-B0)，结果为负
+     * t[0~n-1]  ← A1 - A0
+     * t[n~2n-1] ← B1 - B0
+     */
+    case -2:
+        bn_sub_part_words(t, &a[n], a, tna, tna - n);       // A1 减 A0
+        bn_sub_part_words(&t[n], b, &b[n], tnb, n - tnb);   // B1 减 B0
+        neg = 1;    // 标记结果为负数
+        break;
+    /*
+     * 编码-1/0/1：c1=0(A0=A1) 或 c2=0(B1=B0)
+     * A0-A1=0 或 B1-B0=0 → 整个交叉项乘积为0
+     */
+    case -1:    /* fall through */
+    case 0:     /* fall through */
+    case 1:     /* fall through */
+        zero = 1;   // 标记结果为0，跳过乘法计算
+        break;
+    /*
+     * 编码2：c1=1(A0>A1)，c2=-1(B1<B0)
+     * 计算：(A0-A1) × (B0-B1)，结果为负
+     * t[0~n-1]  ← A0 - A1
+     * t[n~2n-1] ← B0 - B1
+     */
+    case 2:
+        bn_sub_part_words(t, a, &a[n], tna, n - tna);       // A0 减 A1
+        bn_sub_part_words(&t[n], b, &b[n], tnb, n - tnb);   // B0 减 B1
+        neg = 1;    // 标记结果为负数
+        break;
+    /*
+     * 编码3：c1=1(A0>A1)，c2=0(B1=B0)
+     * B1-B0=0 → 整个交叉项乘积为0
+     */
+    case 3:
+        zero = 1;   // 标记结果为0，跳过乘法计算
+        break;
+    /*
+     * 编码4：c1=1(A0>A1)，c2=1(B1>B0)
+     * 计算：(A0-A1) × (B1-B0)，结果为正
+     * t[0~n-1]  ← A0 - A1
+     * t[n~2n-1] ← B1 - B0
+     */
+    case 4:
+        bn_sub_part_words(t, a, &a[n], tna, n - tna);       // A0 减 A1
+        bn_sub_part_words(&t[n], &b[n], b, tnb, tnb - n);   // B1 减 B0
+        break;
+    }
+
+    p = &t[n2 * 2];
+    if (!zero)
+    {
+        bn_mul_recursive(&t[n2], t, &t[n], n, 0, 0, p);
+    }
+    else
+    {
+        memset(&t[n2], 0, sizeof(BN_TYPE_ULONG) * n2);
+    }
+    bn_mul_recursive(r, a, b, n, 0, 0, p);
+    bn_mul_recursive(&r[n2], &a[n], &b[n], n, dna, dnb, p);
+
+    // 把 a₀b₀ 和 a₁b₁ 相加，结果存入 t[0...n2-1]，c1 是进位
+    c1 = (int)bn_add_words(t, r, &r[n2], n2);
+    // t[n2..2n2-1] = a0*b0 + a1*b1 ± (a0−a1)*(b1−b0)（Karatsuba 中间项）
+    if (neg)    // 交叉项为负
+    {   /*
+         * t[n2] = (a0*b0 + a1*b1) − (a0−a1)*(b1−b0)
+         * t[n2...] = t[0...] − 交叉项
+         * c1 -= 借位：把借位计入总进位
+         */
+        c1 -= (int)bn_sub_words(&t[n2], t, &t[n2], n2);
+    }
+    else        // 交叉项为正
+    {   /*
+         * t[n2] = (a0*b0 + a1*b1) + (a0−a1)*(b1−b0)
+         * t[n2...] = 交叉项 + t[0...]
+         * c1 += 进位：把进位计入总进位
+         */
+        c1 += (int)bn_sub_words(&t[n2], &t[n2], t, n2);
+    }
+
+    /*
+     * 将中间项左移 n 字(对应 2^(n*word_bits))
+     * 加到 r 的中间位置，完成 Karatsuba 最终合并：
+     *      A×B = a0*b0 + 中间项<<n + a1*b1<<2n
+     * c1 += : 累计最终进位
+     */
+    c1 += (int)bn_add_words(&r[n], &r[n], &t[n2], n2);
+    if (c1) // 有进位需要处理
+    {
+        p = &r[n + n2]; // 定位到进位起始位置
+        lo = *p;
+        ln =(lo + c1) & BN_MASK;    // 加进位，按 BN_TYPE_ULONG 位宽截断
+        *p =ln;
+
+        if (ln < (BN_TYPE_ULONG)c1) // 说明产生连续进位（如 0xFFFF+1=0x0000，进 1）
+        {
+            do
+            {
+                p++;
+                lo = *p;
+                ln = (lo + 1) & BN_MASK;
+                *p = ln;
+            } while (ln == 0);  // 链式进位，直到无进位为止
+        }
+    }
 }
 
 /**
