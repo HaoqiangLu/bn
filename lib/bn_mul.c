@@ -152,6 +152,20 @@ BN_TYPE_ULONG bn_sub_part_words(BN_TYPE_ULONG *r,
 /*
  * Karatsuba递归乘法（参考：Knuth, The Art of Computer Programming, Vol.2）
  *
+ * A×B = A₀B₀
+ *     + [ (A₀−A₁)(B₁−B₀) + A₀B₀ + A₁B₁ ] · X   // 此令为 M·X
+ *     + A₁B₁ · X²
+ * 计算 3 个核心乘积:
+ *      P0 = A₀ × B₀
+ *      P1 = A₁ × B₁
+ *      P2 = (A₀ − A₁) × (B₁ − B₀)
+ * 计算中间项 M:
+ *      M = P2 + P0 + P1
+ * 按 2⁶⁴ 进制位拼接：
+ *      P0 → 第 0 位（权重 X⁰）
+ *      M  → 第 1 位（权重 X¹）
+ *      P1 → 第 2 位（权重 X²）
+ *
  * r 的长度为 2*n2 个 BN_TYPE_ULONG 字
  * a 和 b 的长度均为 n2 个 BN_TYPE_ULONG 字
  * n2 必须是 2 的幂
@@ -200,6 +214,7 @@ void bn_mul_recursive(BN_TYPE_ULONG *r,
         }
         return;
     }
+
     /*
      * 计算 Karatsuba 核心差值乘积
      * r = (a0 - a1) * (b1 - b0)
@@ -300,61 +315,91 @@ void bn_mul_recursive(BN_TYPE_ULONG *r,
         bn_sub_part_words(&t[n], &b[n], b, tnb, tnb - n);   // B1 减 B0
         break;
     }
-
+    /*
+     *       长度为n        长度为n     长度为2·n，也等于n2
+     *    ╭─────^─────╮ ╭─────^─────╮  ╭───────^───────╮
+     * t [ 0 ... (n-1) | n ... (2n-1) | n2 ... (2·n2-1) | 2·n2 ]
+     *         ⬆             ⬆                ⬆            ⬆
+     *      |A0-A1|       |B1-B0|      |A0-A1|·|B1-B0|     p
+     */
     p = &t[n2 * 2];
+    // 算 P2 = (a0-a1)(b1-b0) → t[n2 ... 2·n2-1]
     if (!zero)
-    {
+    {   // 不应为0，则递归计算 P2 的乘积结果，并放入 t[n2] 起始处
         bn_mul_recursive(&t[n2], t, &t[n], n, 0, 0, p);
     }
     else
-    {
+    {   // 若应为0，则直接从 t[n2] 处开始置0，长度为 n2 个字
         memset(&t[n2], 0, sizeof(BN_TYPE_ULONG) * n2);
     }
+    // 算 P0 = a0*b0 → r[0 ... n2-1]
     bn_mul_recursive(r, a, b, n, 0, 0, p);
+    // 算 P1 = a1*b1 → r[n2 ... 2n2-1]
     bn_mul_recursive(&r[n2], &a[n], &b[n], n, dna, dnb, p);
 
-    // 把 a₀b₀ 和 a₁b₁ 相加，结果存入 t[0...n2-1]，c1 是进位
+    // t = P0 + P1，结果存入 t[0 ... n2-1]，c1 是进位
     c1 = (int)bn_add_words(t, r, &r[n2], n2);
-    // t[n2..2n2-1] = (a0*b0 + a1*b1) ± (a0−a1)*(b1−b0)（Karatsuba 中间项）
-    if (neg)    // 交叉项为负
+    /*
+     *  长度为2·n，等于n2  长度为2·n，等于n2
+     *    ╭─────^─────╮  ╭───────^───────╮
+     * t [ 0 ... (n2-1) | n2 ... (2·n2-1) | 2·n2 ]
+     *         ⬆                ⬆            ⬆
+     *       P0+P1       |A0-A1|·|B1-B0|     p
+     */
+    // t[n2 ... 2·n2-1] = (a0*b0 + a1*b1) ± (a0−a1)*(b1−b0)（Karatsuba 中间项 M）
+    if (neg)    // 交叉项 P2 为负
     {   /*
          * t[n2] = (a0*b0 + a1*b1) − (a0−a1)*(b1−b0)
-         * t[n2...] = t[0...] − 交叉项
+         * t[n2...] = t[0...] − P2
          * c1 -= 借位：把借位计入总进位
          */
-        c1 -= (int)bn_sub_words(&t[n2], t, &t[n2], n2);
+        c1 -= (int)bn_sub_words(&t[n2], t, &t[n2], n2); // t[n2] = M = P0+P1-P2
     }
-    else        // 交叉项为正
+    else        // 交叉项 P2 为正
     {   /*
          * t[n2] = (a0*b0 + a1*b1) + (a0−a1)*(b1−b0)
-         * t[n2...] = 交叉项 + t[0...]
+         * t[n2...] = t[0...] + P2
          * c1 += 进位：把进位计入总进位
          */
-        c1 += (int)bn_sub_words(&t[n2], &t[n2], t, n2);
+        c1 += (int)bn_add_words(&t[n2], &t[n2], t, n2); // t[n2] = M = P0+P1+P2
     }
+    /*
+     *  长度为2·n，等于n2  长度为2·n，等于n2
+     *    ╭─────^─────╮  ╭───────^───────╮
+     * t [ 0 ... (n2-1) | n2 ... (2·n2-1) | 2·n2 ]
+     *         ⬆                ⬆            ⬆
+     *       P0+P1              M            p
+     */
 
     /*
-     * 将中间项左移 n 字(对应 2^(n*word_bits))
+     *              长度为n2                         长度为n2
+     *    ╭────────────^─────────────╮  ╭───────────────^────────────────────╮
+     * r [ 0 ... (n-1) | n ... (n2-1) | n2 ... (n2+n-1) | (n2+n) ... (2·n2-1) ]
+     *         ⬆              ⬆               ⬆                   ⬆
+     *       P0(low)       P0(high)         P1(low)            P1(high)
+     */
+    /*
+     * 将中间项 M 左移 n 字(对应 2^(n*word_bits))
      * 加到 r 的中间位置，完成 Karatsuba 最终合并：
-     *      A×B = a0*b0 + 中间项<<n + a1*b1<<2n
+     *      A×B = a0*b0 + M<<n + a1*b1<<2n
      * c1 += : 累计最终进位
      */
-    c1 += (int)bn_add_words(&r[n], &r[n], &t[n2], n2);
+    c1 += (int)bn_add_words(&r[n], &r[n], &t[n2], n2);  // r[n ... n+n2-1] += M
     if (c1) // 有进位需要处理
     {
-        p = &r[n + n2]; // 定位到进位起始位置
-        lo = *p;
+        p = &r[n + n2]; // n + n2 是 r 中刚好超出中间段的第一个高位字
+        lo = *p;    // 当前高位字原值
         ln =(lo + c1) & BN_MASK;    // 加进位，按 BN_TYPE_ULONG 位宽截断
-        *p =ln;
+        *p =ln; // 写回 *p
 
         if (ln < (BN_TYPE_ULONG)c1) // 说明产生连续进位（如 0xFFFF+1=0x0000，进 1）
         {
             do
             {
-                p++;
-                lo = *p;
-                ln = (lo + 1) & BN_MASK;
-                *p = ln;
+                p++;                        // 指向下一个更高位字
+                lo = *p;                    // 取当前字
+                ln = (lo + 1) & BN_MASK;    // 固定 +1 进位
+                *p = ln;                    // 写回 *p
             } while (ln == 0);  // 链式进位，直到无进位为止
         }
     }
