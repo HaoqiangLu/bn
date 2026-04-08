@@ -315,7 +315,7 @@ void bn_mul_recursive(BN_TYPE_ULONG *r,
 
     // 把 a₀b₀ 和 a₁b₁ 相加，结果存入 t[0...n2-1]，c1 是进位
     c1 = (int)bn_add_words(t, r, &r[n2], n2);
-    // t[n2..2n2-1] = a0*b0 + a1*b1 ± (a0−a1)*(b1−b0)（Karatsuba 中间项）
+    // t[n2..2n2-1] = (a0*b0 + a1*b1) ± (a0−a1)*(b1−b0)（Karatsuba 中间项）
     if (neg)    // 交叉项为负
     {   /*
          * t[n2] = (a0*b0 + a1*b1) − (a0−a1)*(b1−b0)
