@@ -274,11 +274,7 @@ void bn_mul_recursive(BN_TYPE_ULONG *r,
      */
     case -2:
         bn_sub_part_words(t, &a[n], a, tna, tna - n);       // A1 减 A0
-<<<<<<< Updated upstream
-        bn_sub_part_words(&t[n], b, &b[n], tnb, n - tnb);   // B1 减 B0
-=======
         bn_sub_part_words(&t[n], &b[n], b, tnb, tnb - n);   // B1 减 B0
->>>>>>> Stashed changes
         neg = 1;    // 标记结果为负数
         break;
     /*
