@@ -406,6 +406,48 @@ void bn_mul_recursive(BN_TYPE_ULONG *r,
 }
 
 /**
+ * @brief Karatsuba 分治乘法 —— 非等长、非2的幂次长度的处理部分字长的大数乘法
+ *
+ * @param[out] r   结果存放数组
+ * @param[in]  a   被乘数（实际长度 = n + tna）
+ * @param[in]  b   乘数（实际长度 = n + tnb）
+ * @param[in]  n   基础分块长度
+ * @param[in]  tna a 有效长度超出 n 的部分
+ * @param[in]  tnb b 有效长度超出 n 的部分
+ * @param[in]  t   临时数组
+ *
+ * @note 1. n + tn 为字长
+ * @note 2. t 需满足 n*4 的长度，r 同理
+ * @note 3. tnX 不得为负数，且需小于 n
+ */
+void bn_mul_part_recursive(BN_TYPE_ULONG *r,
+                           BN_TYPE_ULONG *a,
+                           BN_TYPE_ULONG *b,
+                           int n, int tna, int tnb,
+                           BN_TYPE_ULONG *t)
+{
+    int i, j;
+    int n2 = n * 2;     // Karatsuba 分块后，每块乘积占 2n 字
+    /*
+     * c1: a 高低两半的大小比较结果;
+     * c1: b 高低两半的大小比较结果;
+     * neg: 标记中间项 (a0−a1)(b1−b0) 是否为负数
+     */
+    int c1, c2, neg;
+    BN_TYPE_ULONG ln, lo, *p;
+
+    if (n < 8)  // 递归中止，小长度直接朴素乘法
+    {
+        bn_mul_normal(r, a, n + tna, b, n + tnb);
+        return;
+    }
+
+    /* r = (a[0]-a[1])*(b[1]-b[0]) */
+    c1 = bn_cmp_part_words(a, &a[n], tna, n - tna);
+    c2 = bn_cmp_part_words(&b[n], b, tnb, tnb - n);
+}
+
+/**
  * @brief 大数乘法
  *
  * @param[out] r   乘法结果
