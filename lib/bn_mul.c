@@ -446,11 +446,6 @@ void bn_mul_part_recursive(BN_TYPE_ULONG *r,
         return;
     }
 
-<<<<<<< Updated upstream
-    /* r = (a[0]-a[1])*(b[1]-b[0]) */
-    c1 = bn_cmp_part_words(a, &a[n], tna, n - tna);
-    c2 = bn_cmp_part_words(&b[n], b, tnb, tnb - n);
-=======
     /* 此处同bn_mul_recursive()的过程 */
     c1 = bn_cmp_part_words(a, &a[n], tna, n - tna);
     c2 = bn_cmp_part_words(&b[n], b, tnb, tnb - n);
@@ -575,7 +570,6 @@ void bn_mul_part_recursive(BN_TYPE_ULONG *r,
             } while (ln == 0);
         }
     }
->>>>>>> Stashed changes
 }
 
 /**
