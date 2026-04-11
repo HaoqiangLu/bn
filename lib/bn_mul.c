@@ -315,13 +315,13 @@ void bn_mul_recursive(BN_TYPE_ULONG *r,
         bn_sub_part_words(&t[n], &b[n], b, tnb, tnb - n);   // B1 减 B0
         break;
     }
-    /*
+    /**************************************************************
      *       长度为n        长度为n     长度为2·n，也等于n2
      *    ╭─────^─────╮ ╭─────^─────╮  ╭───────^───────╮
      * t [ 0 ... (n-1) | n ... (2n-1) | n2 ... (2·n2-1) | 2·n2 ]
      *         ⬆             ⬆                ⬆            ⬆
      *      |A0-A1|       |B1-B0|      |A0-A1|·|B1-B0|     p
-     */
+     **************************************************************/
     p = &t[n2 * 2];
     // 算 P2 = (a0-a1)(b1-b0) → t[n2 ... 2·n2-1]
     if (!zero)
@@ -339,13 +339,13 @@ void bn_mul_recursive(BN_TYPE_ULONG *r,
 
     // t = P0 + P1，结果存入 t[0 ... n2-1]，c1 是进位
     c1 = (int)bn_add_words(t, r, &r[n2], n2);
-    /*
+    /**************************************************************
      *  长度为2·n，等于n2  长度为2·n，等于n2
      *    ╭─────^─────╮  ╭───────^───────╮
      * t [ 0 ... (n2-1) | n2 ... (2·n2-1) | 2·n2 ]
      *         ⬆                ⬆            ⬆
      *       P0+P1       |A0-A1|·|B1-B0|     p
-     */
+     **************************************************************/
     // t[n2 ... 2·n2-1] = (a0*b0 + a1*b1) ± (a0−a1)*(b1−b0)（Karatsuba 中间项 M）
     if (neg)    // 交叉项 P2 为负
     {   /*
@@ -363,21 +363,21 @@ void bn_mul_recursive(BN_TYPE_ULONG *r,
          */
         c1 += (int)bn_add_words(&t[n2], &t[n2], t, n2); // t[n2] = M = P0+P1+P2
     }
-    /*
+    /**************************************************************
      *  长度为2·n，等于n2  长度为2·n，等于n2
      *    ╭─────^─────╮  ╭───────^───────╮
      * t [ 0 ... (n2-1) | n2 ... (2·n2-1) | 2·n2 ]
      *         ⬆                ⬆            ⬆
      *       P0+P1              M            p
-     */
+     **************************************************************/
 
-    /*
+    /****************************************************************************
      *              长度为n2                         长度为n2
      *    ╭────────────^─────────────╮  ╭───────────────^────────────────────╮
      * r [ 0 ... (n-1) | n ... (n2-1) | n2 ... (n2+n-1) | (n2+n) ... (2·n2-1) ]
      *         ⬆              ⬆               ⬆                   ⬆
      *       P0(low)       P0(high)         P1(low)            P1(high)
-     */
+     ****************************************************************************/
     /*
      * 将中间项 M 左移 n 字(对应 2^(n*word_bits))
      * 加到 r 的中间位置，完成 Karatsuba 最终合并：
@@ -419,6 +419,8 @@ void bn_mul_recursive(BN_TYPE_ULONG *r,
  * @note 1. n + tn 为字长
  * @note 2. t 需满足 n*4 的长度，r 同理
  * @note 3. tnX 不得为负数，且需小于 n
+ *
+ * // TODO 未加comba算法
  */
 void bn_mul_part_recursive(BN_TYPE_ULONG *r,
                            BN_TYPE_ULONG *a,
@@ -448,6 +450,9 @@ void bn_mul_part_recursive(BN_TYPE_ULONG *r,
     neg = 0;
     switch (c1 * 3 + c2)
     {
+    /*
+     * 0 的情况（差值为 0）在这里还没实现。但就算实现了，速度提升也几乎可以忽略。
+     */
     case -4:
         bn_sub_part_words(t, &a[n], a, tna, tna - n);
         bn_sub_part_words(&t[n], b, &b[n], tnb, n - tnb);
@@ -472,18 +477,17 @@ void bn_mul_part_recursive(BN_TYPE_ULONG *r,
         bn_sub_part_words(&t[n], &b[n], b, tnb, tnb - n);
         break;
     }
-    /*
-     * 0 的情况（差值为 0）在这里还没实现。但就算实现了，速度提升也几乎可以忽略。
-     */
 
     p = &t[n2 * 2];
     // 算 P2 = (a0-a1)(b1-b0) → t[n2 ... 2·n2-1]
     bn_mul_recursive(&t[n2], t, &t[n], n, 0, 0, p);
     // 算 P0 = a0*b0 → r[0 ... n2-1]
     bn_mul_recursive(r, a, b, n, 0, 0, p);
-    i = n / 2;
+    i = n / 2;  // 递归分解的新基准大小
     /*
      * 如果这个数只有下半部分（没有上半部分 / 上半部分为 0），那就直接算
+     * j 用于判断高位部分的长度与 i 的关系：
+     *      取 tna 和 tnb 中的较大值减去 i
      */
     if (tna > tnb)
     {
@@ -493,25 +497,31 @@ void bn_mul_part_recursive(BN_TYPE_ULONG *r,
     {
         j = tnb - i;
     }
-    if (j == 0)
+    if (j == 0)     // 高位部分恰好为 i 位
     {
+        // 直接使用 bn_mul_recursive 计算
         bn_mul_recursive(&r[n2], &a[n], &b[n], i, tna - i, tnb - i, p);
+        // 将结果后面的部分清零，确保结果长度正确
         memset(&r[n2 + i * 2], 0, sizeof(BN_TYPE_ULONG) * (n2 - i * 2));
     }
-    else if (j > 0)
+    else if (j > 0) // 高位部分超过 i 位
     {
+        // 递归调用 bn_mul_part_recursive
         bn_mul_part_recursive(&r[n2], &a[n], &b[n], i, tna - i, tnb - i, p);
+        // 同样在计算后将结果后面的部分清零
         memset(&r[n2 + tna + tnb], 0, sizeof(BN_TYPE_ULONG) * (n2 - tna - tnb));
     }
-    else
+    else            // 高位部分不足 i 位
     {
+        // 首先将结果区域清零
         memset(&r[n2], 0, sizeof(BN_TYPE_ULONG) * n2);
+        // 如果高位部分长度小于 BN_MUL_RECURSIVE_SIZE_NORMAL，直接使用 bn_mul_normal
         if (tna < BN_MUL_RECURSIVE_SIZE_NORMAL &&
             tnb < BN_MUL_RECURSIVE_SIZE_NORMAL)
         {
             bn_mul_normal(&r[n2], &a[n], tna, &b[n], tnb);
         }
-        else
+        else    // 否则，不断将 i 减半，直到找到合适的分解点
         {
             for (;;)
             {
@@ -521,12 +531,12 @@ void bn_mul_part_recursive(BN_TYPE_ULONG *r,
                  * tna 和 tnb 之间的差值，只可能是 0 或者 1。
                  */
                 if (i < tna || i < tnb)
-                {
+                {   // 当 i < tna 或 i < tnb 时，使用 bn_mul_part_recursive
                     bn_mul_part_recursive(&r[n2], &a[n], &b[n], i, tna - i, tnb - i, p);
                     break;
                 }
                 else if (i == tna || i == tnb)
-                {
+                {   // 当 i == tna 或 i == tnb 时，使用 bn_mul_recursive
                     bn_mul_recursive(&r[n2], &a[n], &b[n], i, tna - i, tnb - i, p);
                     break;
                 }
@@ -535,16 +545,23 @@ void bn_mul_part_recursive(BN_TYPE_ULONG *r,
         }
     }
 
+    // t = P0 + P1，结果存入 t[0 ... n2-1]，c1 是进位
     c1 = (int)bn_add_words(t, r, &r[n2], n2);
-    if (neg)
-    {
+    if (neg)    // 交叉项 P2 为负
+    {   // t[n2] = (a0*b0 + a1*b1) − (a0−a1)*(b1−b0)
         c1 -= (int)bn_sub_words(&t[n2], t, &t[n2], n2);
     }
-    else
-    {
+    else        // 交叉项 P2 为正
+    {   // t[n2] = (a0*b0 + a1*b1) + (a0−a1)*(b1−b0)
         c1 += (int)bn_add_words(&t[n2], &t[n2], t, n2);
     }
 
+    /*
+     * 将中间项 M 左移 n 字(对应 2^(n*word_bits))
+     * 加到 r 的中间位置，完成 Karatsuba 最终合并：
+     *      A×B = a0*b0 + M<<n + a1*b1<<2n
+     * c1 += : 累计最终进位
+     */
     c1 += (int)bn_add_words(&r[n], &r[n], &t[n2], n2);
     if (c1)
     {
@@ -598,6 +615,11 @@ int bn_mul_fixed_top(BigNum *r, BigNum *a, BigNum *b, BnCtx *ctx)
     int ret = 0;
     int top, al, bl;
     BigNum *rr; // 计算结果临时保存的对象
+#ifndef DISABLE_BN_RECURSION
+    int i;
+    BigNum *t = NULL;
+    int k, j = 0;
+#endif
 
     al = a->used_words; // a的d数组元素个数
     bl = b->used_words; // b的d数组元素个数
@@ -619,6 +641,10 @@ int bn_mul_fixed_top(BigNum *r, BigNum *a, BigNum *b, BnCtx *ctx)
         rr = r; // rr直接使用r的地址空间
     }
 
+#ifndef DISABLE_BN_RECURSION
+    i = al - bl;
+#endif
+
     // 对结果对象rr进行按word扩容
     if (bn_words_expend(rr, top) == NULL)
         goto err;
@@ -632,6 +658,13 @@ int bn_mul_fixed_top(BigNum *r, BigNum *a, BigNum *b, BnCtx *ctx)
         goto err;
     ret = 1;
 
+#ifndef DISABLE_BN_RECURSION
+end:
+#endif
+    rr ->neg = a->neg ^ b->neg;
+    bn_set_flags(rr, BN_FLAG_FIXED_TOP);
+    if (r != rr && bn_copy(r, rr) == NULL) goto err;
+    ret = 1;
 err:
     bn_ctx_end(ctx);
     return ret;
