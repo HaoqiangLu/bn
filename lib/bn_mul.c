@@ -642,7 +642,74 @@ int bn_mul_fixed_top(BigNum *r, BigNum *a, BigNum *b, BnCtx *ctx)
     }
 
 #ifndef DISABLE_BN_RECURSION
-    i = al - bl;
+    i = al - bl;    // a和b的d数组元素个数差，也就是字长差
+    // 若 a 和 b 的字长都超过 Karatsuba 递归乘法阈值，则尝试做 Karatsuba 递归乘法
+    if ((al >= BN_MUL_SIZE_NORMAL) && (bl >= BN_MUL_SIZE_NORMAL))
+    {
+        if (-1 <= i && i <= 1)  // 再若 a 和 b 的字长差值的绝对值 <= 1，则去做 Karatsuba 递归乘法
+        {
+            /*
+             * 在 “两个数里按字(word)数算更长的那个” 的长度上，取不超过它的最大2的幂
+             * 找一个整数 j, 满足：
+             *      j 是 2 的幂 (1, 2, 4, 8, 16, ...)
+             *      j <= max(al, bl) (al、bl 是 a、b 的 used_words，即有效字数)
+             *      在满足上面两条的前提下 j 尽可能大
+             */
+            if (i >= 0)     // al >= bl，a 更长或相等，用 al 算 j
+            {
+                j = bn_num_bits_word((BN_TYPE_ULONG)al);
+            }
+            if (i == -1)    // bl = al + 1，b 更长，用 bl 算 j
+            {
+                j = bn_num_bits_word((BN_TYPE_ULONG)bl);
+            }
+
+            j = 1 << (j - 1);   // 不超过该字长的最大 2 的幂，j 表示如何拆分的字长
+            k = j + j;
+
+            t = bn_ctx_get(ctx);
+            if (t == NULL) goto err;
+
+            /*
+             * 以下在「低 j 字 + 高 (al-j)/(bl-j) 字」的划分上乘。
+             * a->d、b->d 为操作数数组；rr->d 为输出；t->d 为工作区。k=j+j=2j，与乘积宽度同量级
+             *
+             * 条件 al > j 或 bl > j:
+             *      至少一侧总字数严格大于j，低 j 字截取后「高位段」仍含多个有效字，且 (al - j) 与 (bl - j) 常不相等，
+             *      不能仅用对称 Karatsuba 的紧布局完成。bn_mul_part_recursive 在子块上交替使用递归乘与 bn_mul_normal、memset补零等，
+             *      同时存在的中间缓冲区峰值更高，故 bn_words_expend(..., k*4) 为 t 与 rr 预留更多字。
+             *
+             * 否则 al <= j 且 bl <= j :
+             *      两侧全长都不超过j。在此且 |al-bl|<=1 时必有 max(al,bl)=j，(al-j, bl-j)只能是(0,0)、(0,-1)、(-1,0)，
+             *      即高位只差「缺 1 个 limb」或无缺。bn_mul_recursive 专处理这种形状，
+             *      递归中用 bn_cmp_part_words/bn_sub_part_words 等对「部分字」运算，等效于高位补零而不必先扩展BigNum。
+             *      其实现已知 k*2 字足够容纳乘积与该路径 scratch。
+             *
+             * 两路调用形参一致：
+             *      第4参数：为 j (半块宽度，2的幂)
+             *      第5、6参数：为 al-j、bl-j (高位段 limb 数，可为 0 或负表示相对完整半块缺字)
+             *      返回值写入 rr->d，随后 rr->top=top (al+bl)
+             *      符号与 BN_FLAG_FIXED_TOP 在公共 end 标号处处理。
+             *
+             */
+            if (al > j || bl > j)   // 高位段长且不对称 → part
+            {
+                if (bn_words_expend(t, k * 4) == NULL) goto err;
+                if (bn_words_expend(rr, k * 4) == NULL) goto err;
+                bn_mul_part_recursive(rr->d, a->d, b->d, j, al - j, bl - j, t->d);
+            }
+            // al <= j && bl <= j
+            else    // 较长者必为 j；较短者为 j 或 j−1
+            {
+                if (bn_words_expend(t, k * 2) == NULL) goto err;
+                if (bn_words_expend(rr, k * 2) == NULL) goto err;
+                bn_mul_recursive(rr->d, a->d, b->d, j, al - j, bl - j, t->d);
+            }
+            // 乘积有效 limb 数为 al+bl
+            rr->used_words = top;
+            goto end;
+        }
+    }
 #endif
 
     // 对结果对象rr进行按word扩容
@@ -651,18 +718,12 @@ int bn_mul_fixed_top(BigNum *r, BigNum *a, BigNum *b, BnCtx *ctx)
     rr->used_words = top;
     bn_mul_normal(rr->d, a->d, al, b->d, bl);
 
-    rr->neg = a->neg ^ a->neg;  // 异或计算符号位，相同为0，不同为1
-    bn_set_flags(rr, BN_FLAG_FIXED_TOP);
-    // 若rr使用r的地址空间则不进行拷贝，若不同则将rr拷贝给r
-    if (r != rr && bn_copy(r, rr) == NULL)
-        goto err;
-    ret = 1;
-
 #ifndef DISABLE_BN_RECURSION
 end:
 #endif
-    rr ->neg = a->neg ^ b->neg;
+    rr->neg = a->neg ^ a->neg;  // 异或计算符号位，相同为0，不同为1
     bn_set_flags(rr, BN_FLAG_FIXED_TOP);
+    // 若rr使用r的地址空间则不进行拷贝，若不同则将rr拷贝给r
     if (r != rr && bn_copy(r, rr) == NULL) goto err;
     ret = 1;
 err:

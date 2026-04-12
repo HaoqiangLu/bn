@@ -379,6 +379,10 @@ BigNum* bn_copy(BigNum *a, const BigNum *b)
  * @details
  *      函数采用无分支位运算（避免 if-else）分阶段判断有效位数，比循环移位更高效
  *      核心思路是 “从高位到低位逐步缩小范围”
+ * @details
+ *      依次右移：
+ *          若右移后 x 非0，则表示原值的 bit位数 > 右移值，则将 bits 加上右移值
+ *          若右移后 x 为0，则表示原值的 bit位数 ≤ 右移值，则将 bits 加上0
  */
 int bn_num_bits_word(BN_TYPE_ULONG l)
 {
