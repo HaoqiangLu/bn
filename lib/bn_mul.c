@@ -596,7 +596,7 @@ void bn_mul_part_recursive(BN_TYPE_ULONG *r,
  */
 int bn_mul(BigNum *r, const BigNum *a, const BigNum *b, BnCtx *ctx)
 {
-    int ret = bn_mul_fixed_top(r, a, b, ctx);
+    int ret = bn_mul_fixed_top(r, (BigNum *)a, (BigNum *)b, ctx);
     bn_correct_top(r);
     return ret;
 }
@@ -863,7 +863,7 @@ void bn_mul_low_recursive(BN_TYPE_ULONG *r,
  */
 void bn_mul_low_normal(BN_TYPE_ULONG *r, BN_TYPE_ULONG *a, BN_TYPE_ULONG *b, int n)
 {
-    bn_mul_words(r, a, b, b[0]);
+    bn_mul_words(r, a, n, b[0]);
 
     for (;;)
     {
