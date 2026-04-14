@@ -116,6 +116,11 @@ void bn_mul_normal(BN_TYPE_ULONG *r,
                    BN_TYPE_ULONG *a, int na,
                    BN_TYPE_ULONG *b, int nb);
 
+/* bn_div.c */
+int bn_div_fixed_top(BigNum *dv, BigNum *rm,
+                     const BigNum *num, const BigNum *divisor,
+                     BnCtx *ctx);
+
 /* bn_conv.c */
 int bn_dec2bn(BigNum **bn, const char *a);
 char* bn_bn2dec(const BigNum *a);

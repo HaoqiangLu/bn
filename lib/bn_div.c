@@ -47,6 +47,47 @@ static int bn_left_align(BigNum *num)
 }
 
 /**
+ * @brief 大数带余除法对外接口
+ *
+ * 直接实现大整数带余除法（rounding towards zero, 向零取整 = 直接抹掉小数点后面）
+ * 被除数(num) = 商(dv) * 除数(divisor) + 余数(rm)
+ *  - 商的符号：num.neg ^ divisor.neg（结果为 0 时无符号）
+ *  - 余数的符号：与num.neg一致（余数为 0 时无符号）
+ *  - 入参dv/rm为NULL时，不返回对应结果
+ *
+ * @param[out] dv      商
+ * @param[out] rm      余数
+ * @param[in]  num     被除数
+ * @param[in]  divisor 除数
+ * @param[in]  ctx     大数上下文
+ * @return int
+ */
+int bn_div(BigNum *dv, BigNum *rm, const BigNum *num, const BigNum *divisor, BnCtx *ctx)
+{
+    int ret;
+
+    if (bn_is_zero(divisor))
+    {   // 除数为 0 时，直接返回失败。
+        return 0;
+    }
+
+    if (divisor->d[divisor->used_words - 1] == 0)
+    {   // 检查除数最高有效位（divisor->d[divisor->top-1]）是否为 0，若为 0 说明除数未正确初始化。
+        return 0;
+    }
+
+    ret = bn_div_fixed_top(dv, rm, num, divisor, ctx);
+
+    if (ret)
+    {   // 计算成功后，清理商 / 余数的无效高位零，保证 BIGNUM 结构合法
+        if (dv != NULL) bn_correct_top(dv);
+        if (rm != NULL) bn_correct_top(rm);
+    }
+
+    return ret;
+}
+
+/**
  * @brief 执行大整数除法（固定顶位）
  *
  * 该函数将大整数 num 除以 divisor，结果存储在 dv 中，余数存储在 rm 中。
@@ -64,5 +105,65 @@ static int bn_left_align(BigNum *num)
  */
 int bn_div_fixed_top(BigNum *dv, BigNum *rm, const BigNum *num, const BigNum *divisor, BnCtx *ctx)
 {
+    int norm_shift, num_n, div_n, num_neg;
+    int i, j, loop;
+    BigNum *tmp, *snum, *sdiv, *res;
+    BN_TYPE_ULONG *resp, *wnum, *wnumtop;
+    BN_TYPE_ULONG d0, d1;
 
+    bn_ctx_start(ctx);
+    res = (dv == NULL) ? bn_ctx_get(ctx) : dv;  // res = 商（dv为空则从池中取）
+    tmp = bn_ctx_get(ctx);
+    snum = bn_ctx_get(ctx); // 归一化后的被除数
+    sdiv = bn_ctx_get(ctx); // 归一化后的除数
+    if (sdiv == NULL) goto err;
+
+    /* 首先对数做归一化处理 */
+    if (!bn_copy(sdiv, divisor)) goto err;
+    norm_shift = bn_left_align(sdiv);   // 左对齐：把除数最高位移到 limb 的最高位
+    sdiv->neg = 0;  // 除数强制为正
+
+    /*
+     * 注意：bn_lshift_fixed_top 的输出始终比输入多一个 limb，即便 norm_shift 为零也是如此。
+     * 这意味着内层循环的迭代次数与被除数的值无关，
+     * 并且如果被除数与除数原本位数相同，则无需再对二者进行比较。
+     */
+    if (!bn_left_shift_fixed_top(snum, num, norm_shift))
+        goto err;
+
+    div_n = sdiv->used_words;   // 除数 limb 数
+    num_n = snum->used_words;   // 被除数 limb 数
+
+    // 如果被除数不够宽 → 零填充
+    if (num_n <= div_n)
+    {
+        if (bn_words_expend(snum, div_n + 1) == NULL)
+            goto err;
+        memset(&snum->d[num_n], 0, sizeof(BN_TYPE_ULONG) * (div_n - num_n + 1));
+        snum->used_words = num_n = div_n + 1;
+    }
+
+    // 除法总轮次（固定）
+    loop = num_n - div_n;
+    // 窗口：指向当前要除的高位段
+    wnum = &(snum->d[loop]);
+    wnumtop = &(snum->d[num_n - 1]);
+
+    // 除数最高的2个limb
+    d0 = sdiv->d[div_n - 1];
+    d1 = (div_n == 1) ? 0 : sdiv->d[div_n - 2];
+
+    // 初始化商
+    if (!bn_words_expend(res, loop)) goto err;
+    num_neg = num->neg;
+    res->neg = (num_neg ^ divisor->neg);
+    res->used_words = loop;
+    res->flags |= BN_FLAG_FIXED_TOP;
+    resp = &(res->d[loop]);
+
+    if (!bn_words_expend(tmp, (div_n + 1))) goto err;
+
+    // TODO
+
+err:
 }
