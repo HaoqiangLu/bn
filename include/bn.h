@@ -129,6 +129,8 @@ BN_TYPE_ULONG bn_div_word(BigNum *a, BN_TYPE_ULONG w);
 /* bn_shift.c */
 int bn_left_shift_fixed_top(BigNum *r, const BigNum *a, int n);
 int bn_left_shift(BigNum *r, const BigNum *a, int n);
+int bn_right_shift_fixed_top(BigNum *r, const BigNum *a, int n);
+int bn_right_shift(BigNum *r, const BigNum *a, int n);
 
 /* bn_ctx.c */
 BnCtx* bn_ctx_new(void);

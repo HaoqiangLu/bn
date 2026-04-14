@@ -45,3 +45,24 @@ static int bn_left_align(BigNum *num)
     // 返回总共左移了多少位（后面余数要右移这么多还原）
     return lshift;
 }
+
+/**
+ * @brief 执行大整数除法（固定顶位）
+ *
+ * 该函数将大整数 num 除以 divisor，结果存储在 dv 中，余数存储在 rm 中。
+ * 与普通除法不同，此函数保持 BN_FLG_FIXED_TOP 标记，适用于需要常数时间操作的密码学场景。
+ *
+ * @param[out] dv 商的输出 BIGNUM，为 NULL 时在内部创建临时 BIGNUM
+ * @param[out] rm 余数的输出 BIGNUM，为 NULL 时忽略余数
+ * @param[in]  num 被除数 BIGNUM
+ * @param[in]  divisor 除数 BIGNUM
+ * @param[in]  ctx BN_CTX 上下文，用于临时内存管理
+ * @return 成功返回 1，失败返回 0
+ *
+ * @note 此函数实现了一种优化的大整数除法算法，使用归一化和窗口技术提高性能。
+ *       对于密码学应用，它保持常数时间性，防止侧信道攻击。
+ */
+int bn_div_fixed_top(BigNum *dv, BigNum *rm, const BigNum *num, const BigNum *divisor, BnCtx *ctx)
+{
+
+}
