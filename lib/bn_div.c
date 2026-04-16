@@ -163,7 +163,68 @@ int bn_div_fixed_top(BigNum *dv, BigNum *rm, const BigNum *num, const BigNum *di
 
     if (!bn_words_expend(tmp, (div_n + 1))) goto err;
 
-    // TODO
+    for (i = 0; i < loop; i++, wnumtop--)
+    {
+        BN_TYPE_ULONG q, l0;
+        /*
+         * 循环的第一部分使用被除数snum和除数sdiv的最高两个字来计算q，
+         * 使得 | wnum - sdiv * q | < sdiv
+         */
+        BN_TYPE_ULONG n0, n1, rem = 0;
+        n0 = wnumtop[0];
+        n1 = wnumtop[-1];
+        if (n0 == d0)
+        {
+            q = BN_MASK;
+        }
+        else
+        {
+            BN_TYPE_ULONG n2 = (wnumtop == wnum) ? 0: wnumtop[-2];
+            BN_TYPE_ULONG t2l, t2h;
+
+            q = bn_div_words(n0, n1, d0);
+            rem = (n1 - q * d0) & BN_MASK;
+            BN_UMULT_LOHI(t2l, t2h, d1, q);
+            for (;;)
+            {
+                if ((t2h < rem) || ((t2h == rem) && (t2l <= n2)))
+                    break;
+                q--;
+                rem += d0;
+                if (rem < d0) break; // 避免rem溢出
+                if (t2l < d1) t2h--;
+                t2l -= d1;
+            }
+        }
+
+        l0 = bn_mul_words(tmp->d, sdiv->d, div_n, q);
+        tmp->d[div_n] = l0;
+        wnum--;
+
+        l0 = bn_sub_words(wnum, wnum, tmp->d, div_n + 1);
+        q -= l0;
+
+        for (l0 = 0 - l0, j = 0; j < div_n; j++)
+        {
+            tmp->d[j] = sdiv->d[j] & l0;
+        }
+        l0 = bn_add_words(wnum, wnum, tmp->d, div_n);
+        (*wnumtop) += l0;
+
+        *--resp = q;
+    }
+
+    snum->neg = num_neg;
+    snum->used_words = div_n;
+    snum->flags |= BN_FLAG_FIXED_TOP;
+
+    if (rm != NULL && bn_right_shift_fixed_top(rm, snum, norm_shift) == 0)
+        goto err;
+
+    bn_ctx_end(ctx);
+    return 1;
 
 err:
+    bn_ctx_end(ctx);
+    return 0;
 }
