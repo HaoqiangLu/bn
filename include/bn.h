@@ -117,6 +117,9 @@ void bn_mul_normal(BN_TYPE_ULONG *r,
                    BN_TYPE_ULONG *b, int nb);
 
 /* bn_div.c */
+int bn_div(BigNum *dv, BigNum *rm,
+           const BigNum *num, const BigNum *divisor,
+           BnCtx *ctx);
 int bn_div_fixed_top(BigNum *dv, BigNum *rm,
                      const BigNum *num, const BigNum *divisor,
                      BnCtx *ctx);

@@ -114,7 +114,7 @@ int bn_right_shift(BigNum *r, const BigNum *a, int n)
         return 0;
     }
 
-    ret = bn_right_shfit_fixed_top(r, a, n);
+    ret = bn_right_shift_fixed_top(r, a, n);
 
     bn_correct_top(r);
 

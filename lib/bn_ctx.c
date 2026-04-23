@@ -261,7 +261,7 @@ BigNum* bn_ctx_get(BnCtx *ctx)
     /* 确保返回的 BigNum 值为0，干净可用 */
     bn_zero(ret);
     /* 清除上一轮残留的 BN_FLAG_CONSTTIME 标志，避免污染当前运算 */
-    ret->flags |= (~BN_FLAG_CONSTTIME);
+    ret->flags &= (~BN_FLAG_CONSTTIME);
     /* 全局已分配临时大数计数+1，用于栈帧回收 */
     ctx->used++;
     return ret;
