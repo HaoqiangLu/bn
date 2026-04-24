@@ -2,6 +2,7 @@
 #include "bn_ctype.h"
 #include "bn_mem.h"
 #include "bn_in.h"
+#include "bn_tohex.h"
 
 int bn_dec2bn(BigNum **bn, const char *a)
 {
@@ -225,4 +226,70 @@ err:
     }
     MM_FREE(buf);
     return NULL;
+}
+
+/**
+ * @brief 将 BigNum 大整数转换为十六进制字符串
+ *
+ * @param[in] a 指向要转换的 BigNum 结构的指针
+ * @return char* 成功时返回指向十六进制字符串的指针，失败时返回 NULL
+ * @note 对于零值输入，返回字符串 "0"
+ */
+char* bn_bn2hex(const BigNum *a)
+{
+    int i, j, v, z = 0; // z: 标记是否已遇到非零值（用于跳过前导零）
+    int *buf, *p;
+
+    /* 特殊情况处理：如果输入是零，直接返回字符串 "0" */
+    if (bn_is_zero(a))
+    {
+        return BN_STRDUP("0");
+    }
+    /*
+     * 分配足够的内存：
+     *  - 每个字需要 2 * BN_BYTES 个十六进制字符
+     *  - 加 2 个字符用于可能的负号和字符串结束符
+     */
+    buf = MM_MALLOC(a->used_words * BN_BYTES * 2 + 2);
+    if (buf == NULL) goto err;
+
+    p = buf;
+    if (a->neg) // 如果是负数，添加负号
+    {
+        *p++ = '-';
+    }
+
+    /* 从最高有效字开始遍历到最低有效字 */
+    for (i = a->used_words - 1; i >= 0; i--)
+    {
+        /*
+         * 对每个字，从最高字节开始处理到最低字节
+         * BN_UL_BITS 是一个字的位数，通常为 32 或 64
+         * 每次处理 8 位（一个字节）
+         */
+        for (j = BN_UL_BITS; j >= 0; j -= 8)
+        {
+            /*
+             * 提取当前字节的值：
+             * 1. 右移 j 位，将目标字节移到最低位
+             * 2. 与 0xff 进行与操作，只保留低 8 位
+             */
+            v = (int)((a->d[i] >> j) & 0xFF);
+            /* 跳过前导零，直到遇到第一个非零值 */
+            if (z || v != 0)
+            {
+                /*
+                 * 将字节转换为十六进制并写入缓冲区
+                 * bn_to_hex 函数会将一个字节转换为两个十六进制字符
+                 */
+                p += bn_to_hex(p, v);
+                z = 1;  // 标记已遇到非零值，后续不再跳过零
+            }
+        }
+    }
+    /* 添加字符串结束符 */
+    *p = '\0';
+
+err:
+    return buf;
 }

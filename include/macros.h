@@ -1,5 +1,6 @@
 #ifndef _BN_MACROS_H_
 #define _BN_MACROS_H_
+#pragma once
 
 /*
  * 根据配置自定义 __FILE__ 和 __LINE__ 宏

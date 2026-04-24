@@ -1,5 +1,6 @@
 #ifndef _BN_MEM_H_
 #define _BN_MEM_H_
+#pragma once
 
 #include <stdlib.h>
 #include "macros.h"
@@ -38,5 +39,7 @@ void mm_clear_free(void *addr, size_t num, const char *file, int line);
 
 #define MM_MALLOC_ARRAY(num, size)          mm_malloc_arr((num), (size), BN_FILE, BN_LINE)
 #define MM_REALLOC_ARRAY(addr, num, size)   mm_realloc_arr((addr), (num), (size), BN_FILE, BN_LINE)
+
+#define BN_STRDUP(str)                      bn_strdup((str), BN_FILE, BN_LINE)
 
 #endif /* _BN_MEM_H_ */

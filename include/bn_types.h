@@ -1,5 +1,6 @@
 #ifndef _BN_TYPES_H_
 #define _BN_TYPES_H_
+#pragma once
 
 #include <stdlib.h>
 

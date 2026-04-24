@@ -1,5 +1,6 @@
 #ifndef _BN_INTERNAL_H_
 #define _BN_INTERNAL_H_
+#pragma once
 
 #include "bn.h"
 #include "bn_lib.h"

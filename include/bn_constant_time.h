@@ -1,5 +1,6 @@
 #ifndef _BN_CONSTANT_TIME_H_
 #define _BN_CONSTANT_TIME_H_
+#pragma once
 
 #include "bn_in.h"
 

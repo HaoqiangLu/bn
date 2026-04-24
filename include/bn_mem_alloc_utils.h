@@ -1,3 +1,7 @@
+#ifndef _BN_MEM_ALLOC_UTILS_H_
+#define _BN_MEM_ALLOC_UTILS_H_
+#pragma once
+
 #include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -57,3 +61,4 @@ bn_size_add(const size_t size1, const size_t size2, size_t *bytes,
     }
     return true;
 }
+#endif
