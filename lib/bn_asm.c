@@ -213,7 +213,11 @@ BN_TYPE_ULONG bn_sub_words(BN_TYPE_ULONG *r, const BN_TYPE_ULONG *a, const BN_TY
         t1 = a[0];
         /* a先减去上一轮借位c */
         t2 = (t1 - c) & BN_MASK;
-        /* 判断这一步是否需要新借位 */
+        /*
+         * 判断这一步是否需要新借位
+         * 当前位减去上一次的借位后，产生了无符号下溢
+         * 比如当前位的值是0，但前一位的减法借了1，这样当前 t2 = t1 - c 就会产生下溢，就会出现 t2 > t1 的情况
+         */
         c = (t2 > t1);
         /* 取减数b */
         t1 = b[0];
